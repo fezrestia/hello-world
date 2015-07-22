@@ -1,0 +1,20 @@
+<html>
+<body>
+
+<span style="font-size: 200%">MEMO</span>
+
+    <form action="/memoNew" method="post">
+        <div>
+            <textarea name="content" rows="2" cols="40"></textarea>
+        </div>
+        <input type="submit" value="SUBMIT"/>
+    </form>
+
+    #foreach ($memo in $memos)
+        <div>
+            <span class="date"> $_datatimeFormat.format($memo.date) </span>
+            <pre> $memo.content </pre>
+        </div>
+    #end
+</body>
+</html>
