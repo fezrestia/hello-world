@@ -3,3 +3,7 @@
 .classpath
 .project
 war/WEB-INF/classes/
+
+# Google App Engine related.
+war/WEB-INF/appengine-generated/
+

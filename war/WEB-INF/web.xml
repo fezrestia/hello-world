@@ -1,18 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
-<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-xmlns="http://java.sun.com/xml/ns/javaee"
-xmlns:web="http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
-xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
-http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" version="2.5">
-	<servlet>
-		<servlet-name>HelloWorld</servlet-name>
-		<servlet-class>com.fezrestia.gae.helloworld.HelloWorldServlet</servlet-class>
-	</servlet>
-	<servlet-mapping>
-		<servlet-name>HelloWorld</servlet-name>
-		<url-pattern>/helloworld</url-pattern>
-	</servlet-mapping>
-	<welcome-file-list>
-		<welcome-file>index.html</welcome-file>
-	</welcome-file-list>
+
+<web-app
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns="http://java.sun.com/xml/ns/javaee"
+        xmlns:web="http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+        xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
+                http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+        version="2.5"
+>
+    <!-- SERVLET LIST ======================================================================== -->
+    <servlet>
+        <servlet-name>HelloWorld</servlet-name>
+        <servlet-class>com.fezrestia.gae.helloworld.HelloWorldServlet</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>memoMainPage</servlet-name>
+        <servlet-class>com.fezrestia.gae.memo.MainPage</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>memoNew</servlet-name>
+        <servlet-class>com.fezrestia.gae.memo.New</servlet-class>
+    </servlet>
+    <!-- ===================================================================================== -->
+
+    <!-- URL vs. SERVLET MAP ================================================================= -->
+    <servlet-mapping>
+        <servlet-name>HelloWorld</servlet-name>
+        <url-pattern>/helloworld</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>memoMainPage</servlet-name>
+        <url-pattern>/memoMainPage</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>memoNew</servlet-name>
+        <url-pattern>/memoNew</url-pattern>
+    </servlet-mapping>
+    <!-- ===================================================================================== -->
+
+    <!-- ENTRANCE HTML ======================================================================= -->
+    <welcome-file-list>
+        <welcome-file>index.html</welcome-file>
+    </welcome-file-list>
+    <!-- ===================================================================================== -->
+
 </web-app>
