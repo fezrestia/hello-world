@@ -12,9 +12,10 @@
 
     #foreach ($memo in $memos)
         <div>
-            <span class="date"> $_datatimeFormat.format($memo.date) </span>
+            <span class="date"> $_datetimeFormat.format($memo.date) </span>
             <pre> $memo.content </pre>
         </div>
     #end
+
 </body>
 </html>

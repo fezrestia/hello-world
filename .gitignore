@@ -2,8 +2,10 @@
 .settings/
 .classpath
 .project
-war/WEB-INF/classes/
 
 # Google App Engine related.
 war/WEB-INF/appengine-generated/
+war/WEB-INF/classes/
 
+# ANT related.
+local.properties
