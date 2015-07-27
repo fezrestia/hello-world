@@ -14,10 +14,10 @@ public class Memo {
     @Persistent(valueStrategy = IdGeneratorStrategy.IDENTITY)
     private Long id;
 
-    @Persistent 
+    @Persistent
     private String content;
 
-    @Persistent 
+    @Persistent
     private Date date;
 
     public Memo(String content, Date date) {

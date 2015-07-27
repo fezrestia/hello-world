@@ -82,7 +82,11 @@
       depends="datanucleusenhance"
       description="Starts the development server."
   >
-    <dev_appserver war="war"/>
+    <dev_appserver war="war">
+      <options>
+        <arg value="--disable_update_check"/>
+      </options>
+    </dev_appserver>
   </target>
 
   <target

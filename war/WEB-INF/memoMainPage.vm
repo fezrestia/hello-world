@@ -12,8 +12,8 @@
 
     #foreach ($memo in $memos)
         <div>
-            <span class="date"> $_datetimeFormat.format($memo.date) </span>
-            <pre> $memo.content </pre>
+            <span class="Date">$_datetimeFormat.format($memo.date)</span>
+            <pre>$memo.content</pre>
         </div>
     #end
 
