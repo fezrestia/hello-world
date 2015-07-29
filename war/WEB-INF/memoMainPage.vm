@@ -1,7 +1,15 @@
 <html>
 <body>
 
-<span style="font-size: 200%">MEMO</span>
+    <span style="font-size: 200%">MEMO</span>
+
+    #if ( $user )
+        <span> for $user </span>
+        <a href="$signOutUrl">Logout</a>
+    #else
+        <span> for Anonymous Cowards </span>
+        <a href="$signInUrl">Login</a>
+    #end
 
     <form action="/memoNew" method="post">
         <div>

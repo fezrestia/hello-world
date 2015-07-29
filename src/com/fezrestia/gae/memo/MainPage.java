@@ -15,6 +15,9 @@ import org.apache.velocity.context.Context;
 
 import com.fezrestia.gae.util.PMF;
 import com.fezrestia.gae.velocity.Renderer;
+import com.google.appengine.api.users.User;
+import com.google.appengine.api.users.UserService;
+import com.google.appengine.api.users.UserServiceFactory;
 
 @SuppressWarnings("serial")
 public class MainPage extends HttpServlet {
@@ -24,19 +27,43 @@ public class MainPage extends HttpServlet {
 
     @Override
     public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        PersistenceManager pm = PMF.get().getPersistenceManager();
+        // Get user.
+        UserService userService = UserServiceFactory.getUserService();
+        User user = userService.getCurrentUser(); // If user does not login yet, return null.
 
-        Query query = pm.newQuery(Memo.class);
-        query.setOrdering("date desc");
+        PersistenceManager pm = null;
 
-        List<Memo> memos = (List<Memo>) query.execute();
+        try {
+            pm = PMF.get().getPersistenceManager();
 
-        Context context = new VelocityContext();
-        context.put("memos",  memos);
+            // Query.
+            Query query = pm.newQuery(Memo.class);
+            query.setOrdering("date desc");
+            query.declareParameters("com.google.appengine.api.users.User user_name");
+            query.setFilter("author == user_name");
 
-        resp.setContentType("text/html");
-        resp.setCharacterEncoding("utf-8");
+            List<Memo> memos = (List<Memo>) query.execute(user);
 
-        Renderer.render("WEB-INF/memoMainPage.vm", context, resp.getWriter());
+            Context context = new VelocityContext();
+            context.put("memos",  memos);
+
+            // Sign in/out URL.
+            String signOutUrl = userService.createLogoutURL(req.getRequestURI());
+            String signInUrl = userService.createLoginURL(req.getRequestURI());
+            context.put("signOutUrl", signOutUrl);
+            context.put("signInUrl", signInUrl);
+            context.put("user", user);
+
+            resp.setContentType("text/html");
+            resp.setCharacterEncoding("utf-8");
+
+            Renderer.render("WEB-INF/memoMainPage.vm", context, resp.getWriter());
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (pm != null && !pm.isClosed()) {
+                pm.close();
+            }
+        }
     }
 }
