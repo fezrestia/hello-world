@@ -35,6 +35,19 @@
         <servlet-name>dataloadUpload</servlet-name>
         <servlet-class>com.fezrestia.gae.dataload.Upload</servlet-class>
     </servlet>
+
+    <servlet>
+        <servlet-name>mailLowLevelMailSender</servlet-name>
+        <servlet-class>com.fezrestia.gae.mail.LowLevelMailSender</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>mailJavaMailSender</servlet-name>
+        <servlet-class>com.fezrestia.gae.mail.JavaMailSender</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>mailJavaMailReceiver</servlet-name>
+        <servlet-class>com.fezrestia.gae.mail.JavaMailReceiver</servlet-class>
+    </servlet>
     <!-- ===================================================================================== -->
 
     <!-- URL vs. SERVLET MAP ================================================================= -->
@@ -64,6 +77,30 @@
         <servlet-name>dataloadUpload</servlet-name>
         <url-pattern>/dataloadUpload</url-pattern>
     </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>mailLowLevelMailSender</servlet-name>
+        <url-pattern>/mailLowLevelMailSender</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>mailJavaMailSender</servlet-name>
+        <url-pattern>/mailJavaMailSender</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>mailJavaMailReceiver</servlet-name>
+        <url-pattern>/_ah/mail/*</url-pattern>
+    </servlet-mapping>
+    <!-- ===================================================================================== -->
+
+    <!-- SECURITY ============================================================================ -->
+    <security-constraint>
+        <web-resource-collection>
+            <url-pattern>/_ah/mail/*</url-pattern>
+        </web-resource-collection>
+        <auth-constraint>
+            <role-name>admin</role-name>
+        </auth-constraint>
+    </security-constraint>
     <!-- ===================================================================================== -->
 
     <!-- ENTRANCE HTML ======================================================================= -->
