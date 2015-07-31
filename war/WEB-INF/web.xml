@@ -22,6 +22,19 @@
         <servlet-name>memoNew</servlet-name>
         <servlet-class>com.fezrestia.gae.memo.New</servlet-class>
     </servlet>
+
+    <servlet>
+        <servlet-name>dataloadDataManager</servlet-name>
+        <servlet-class>com.fezrestia.gae.dataload.DataManager</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>dataloadFileServer</servlet-name>
+        <servlet-class>com.fezrestia.gae.dataload.FileServer</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>dataloadUpload</servlet-name>
+        <servlet-class>com.fezrestia.gae.dataload.Upload</servlet-class>
+    </servlet>
     <!-- ===================================================================================== -->
 
     <!-- URL vs. SERVLET MAP ================================================================= -->
@@ -37,6 +50,19 @@
     <servlet-mapping>
         <servlet-name>memoNew</servlet-name>
         <url-pattern>/memoNew</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>dataloadDataManager</servlet-name>
+        <url-pattern>/dataloadDataManager</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>dataloadFileServer</servlet-name>
+        <url-pattern>/dataloadFileServer</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>dataloadUpload</servlet-name>
+        <url-pattern>/dataloadUpload</url-pattern>
     </servlet-mapping>
     <!-- ===================================================================================== -->
 

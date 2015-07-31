@@ -1,0 +1,40 @@
+<html>
+<body>
+
+    <span style="font-size: 200%">BLOB upload/download control</span>
+
+    <table rules="all" cellpadding="5>
+        <tr align="center" bgcolor="lightgray">
+            <th width="100">FILE</th>
+            <th width="100">KEY</th>
+            <th width="100">TYPE</th>
+            <th width="100">SIZE</th>
+            <th width="100">TIME</th>
+            <th></th>
+        </tr>
+
+#foreach ($blob in $blobs)
+        <tr align="right">
+            <td>
+                <a href="/dataloadFileServer?blob-key=$blob.getBlobKey().getKeyString()">$blob.filename</a>
+            </td>
+            <td>$blob.getBlobKey().getKeyString()</td>
+            <td>$blob.contentType</td>
+            <td>$blob.size</td>
+            <td>$_datetimeFormat.format($blob.creation)</td>
+            <td>
+                <a href="/dataloadFileServer?blob-key=$blob.getBlobKey().getKeyString()&delete=true">DEL</a>
+            </td>
+        </tr>
+#end
+    </table>
+
+    <hr/>
+
+    <form action="$uploadUrl" method="post" enctype="multipart/form-data">
+        <input type="file" name="uploadedFile">
+        <input type="submit" value="Submit">
+    </form>
+
+</body>
+</html>
