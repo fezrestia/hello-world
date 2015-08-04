@@ -48,6 +48,16 @@
         <servlet-name>mailJavaMailReceiver</servlet-name>
         <servlet-class>com.fezrestia.gae.mail.JavaMailReceiver</servlet-class>
     </servlet>
+
+    <servlet>
+        <servlet-name>imagemailImageMailHandler</servlet-name>
+        <servlet-class>com.fezrestia.gae.imagemail.ImageMailHandler</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>utilImageDisplay</servlet-name>
+        <servlet-class>com.fezrestia.gae.util.ImageDisplay</servlet-class>
+    </servlet>
     <!-- ===================================================================================== -->
 
     <!-- URL vs. SERVLET MAP ================================================================= -->
@@ -89,6 +99,16 @@
     <servlet-mapping>
         <servlet-name>mailJavaMailReceiver</servlet-name>
         <url-pattern>/_ah/mail/*</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>imagemailImageMailHandler</servlet-name>
+        <url-pattern>/_ah/mail/*</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>utilImageDisplay</servlet-name>
+        <url-pattern>/utilImageDisplay</url-pattern>
     </servlet-mapping>
     <!-- ===================================================================================== -->
 
