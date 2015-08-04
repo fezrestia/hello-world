@@ -58,6 +58,10 @@
         <servlet-name>xmppXmppEcho</servlet-name>
         <servlet-class>com.fezrestia.gae.xmpp.XmppEcho</servlet-class>
     </servlet>
+    <servlet>
+        <servlet-name>xmppXmpp2Twitter</servlet-name>
+        <servlet-class>com.fezrestia.gae.xmpp.Xmpp2Twitter</servlet-class>
+    </servlet>
 
     <servlet>
         <servlet-name>utilImageDisplay</servlet-name>
@@ -111,8 +115,14 @@
         <url-pattern>/_ah/mail/*</url-pattern>
     </servlet-mapping>
 
+<!--
     <servlet-mapping>
         <servlet-name>xmppXmppEcho</servlet-name>
+        <url-pattern>/_ah/xmpp/message/chat/*</url-pattern>
+    </servlet-mapping>
+-->
+    <servlet-mapping>
+        <servlet-name>xmppXmpp2Twitter</servlet-name>
         <url-pattern>/_ah/xmpp/message/chat/*</url-pattern>
     </servlet-mapping>
 

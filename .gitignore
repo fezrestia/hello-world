@@ -9,3 +9,7 @@ war/WEB-INF/classes/
 
 # ANT related.
 local.properties
+
+# Private info.
+src/com/fezrestia/PrivateConstants.java
+
