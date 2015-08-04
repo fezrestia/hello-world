@@ -55,6 +55,11 @@
     </servlet>
 
     <servlet>
+        <servlet-name>xmppXmppEcho</servlet-name>
+        <servlet-class>com.fezrestia.gae.xmpp.XmppEcho</servlet-class>
+    </servlet>
+
+    <servlet>
         <servlet-name>utilImageDisplay</servlet-name>
         <servlet-class>com.fezrestia.gae.util.ImageDisplay</servlet-class>
     </servlet>
@@ -104,6 +109,11 @@
     <servlet-mapping>
         <servlet-name>imagemailImageMailHandler</servlet-name>
         <url-pattern>/_ah/mail/*</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>xmppXmppEcho</servlet-name>
+        <url-pattern>/_ah/xmpp/message/chat/*</url-pattern>
     </servlet-mapping>
 
     <servlet-mapping>
