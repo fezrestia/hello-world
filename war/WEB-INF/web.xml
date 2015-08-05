@@ -64,6 +64,11 @@
     </servlet>
 
     <servlet>
+        <servlet-name>parsehtmlHtmlParser</servlet-name>
+        <servlet-class>com.fezrestia.gae.parsehtml.HtmlParser</servlet-class>
+    </servlet>
+
+    <servlet>
         <servlet-name>utilImageDisplay</servlet-name>
         <servlet-class>com.fezrestia.gae.util.ImageDisplay</servlet-class>
     </servlet>
@@ -124,6 +129,11 @@
     <servlet-mapping>
         <servlet-name>xmppXmpp2Twitter</servlet-name>
         <url-pattern>/_ah/xmpp/message/chat/*</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>parsehtmlHtmlParser</servlet-name>
+        <url-pattern>/parsehtmlHtmlParser</url-pattern>
     </servlet-mapping>
 
     <servlet-mapping>
