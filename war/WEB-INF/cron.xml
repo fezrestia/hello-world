@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<cronentries>
+<!--
+    <cron>
+        <url>/twitterbotCronTaskHandler</url>
+        <description>queue bot tasks</description>
+        <schedule>every 2 minutes</schedule>
+    </cron>
+-->
+</cronentries>

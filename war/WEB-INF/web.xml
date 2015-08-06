@@ -69,6 +69,31 @@
     </servlet>
 
     <servlet>
+        <servlet-name>twitterbotBotEditor</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.BotEditor</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>twitterbotBotEditorHandler</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.BotEditorHandler</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>twitterbotAuthHandler</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.AuthHandler</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>twitterbotBotList</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.BotList</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>twitterbotBotHandler</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.BotHandler</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>twitterbotCronTaskHandler</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.CronTaskHandler</servlet-class>
+    </servlet>
+
+    <servlet>
         <servlet-name>utilImageDisplay</servlet-name>
         <servlet-class>com.fezrestia.gae.util.ImageDisplay</servlet-class>
     </servlet>
@@ -137,6 +162,31 @@
     </servlet-mapping>
 
     <servlet-mapping>
+        <servlet-name>twitterbotBotEditor</servlet-name>
+        <url-pattern>/twitterbotBotEditor</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>twitterbotBotEditorHandler</servlet-name>
+        <url-pattern>/twitterbotBotEditorHandler</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>twitterbotAuthHandler</servlet-name>
+        <url-pattern>/authenticated</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>twitterbotBotList</servlet-name>
+        <url-pattern>/twitterbotBotList</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>twitterbotBotHandler</servlet-name>
+        <url-pattern>/twitterbotBotHandler</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>twitterbotCronTaskHandler</servlet-name>
+        <url-pattern>/twitterbotCronTaskHandler</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
         <servlet-name>utilImageDisplay</servlet-name>
         <url-pattern>/utilImageDisplay</url-pattern>
     </servlet-mapping>
@@ -149,6 +199,16 @@
         </web-resource-collection>
         <auth-constraint>
             <role-name>admin</role-name>
+        </auth-constraint>
+    </security-constraint>
+    <security-constraint>
+        <web-resource-collection>
+            <url-pattern>/twitterbotBotList</url-pattern>
+            <url-pattern>/twitterbotBotEditor</url-pattern>
+            <url-pattern>/twitterbotBotEditorHandler</url-pattern>
+        </web-resource-collection>
+        <auth-constraint>
+            <role-name>*</role-name>
         </auth-constraint>
     </security-constraint>
     <!-- ===================================================================================== -->
