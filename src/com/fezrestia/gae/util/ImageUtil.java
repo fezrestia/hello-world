@@ -72,7 +72,7 @@ public final class ImageUtil {
 
             query.setFilter("id == imageId");
             query.declareParameters("Long imageId");
-            List<ImageEntity> images = (List<ImageEntity>) query.execute(new Long(imageId));
+            List<ImageEntity> images = (List<ImageEntity>) query.execute(imageId);
             if (!images.isEmpty()) {
                 return images.get(0);
             } else {

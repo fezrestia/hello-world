@@ -1,0 +1,38 @@
+<html>
+<body>
+
+    <span style="font-size: 200%">All ImageEntity in DataStore</span>
+
+    <table rules="all" cellpadding="5">
+        <tr align="center" bgcolor="lightgray">
+            <th width="200">FILE</th>
+            <th width="140">TYPE</th>
+            <th width="80">SIZE</th>
+            <th width="30"></th>
+        </tr>
+
+#foreach ($image in $images)
+        <tr align="right">
+            <td>
+                <a href="/imagetransformImageTransformPanel?imageId=$image.getId()">$image.getName()</a>
+            </td>
+            <td>$image.getContentType()</td>
+            <td>$image.getBytes().size()</td>
+            <td>
+                <a href="/utilImageDisplay?imageId=$image.getId()&redirect_to=/imagetransformDataManager&delete=true">DEL</a>
+            </td>
+        </tr>
+#end
+
+    </table>
+
+    <hr/>
+
+    <form action="/utilImageUpload" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="redirect_to" value="/imagetransformDataManager">
+        <input type="file" name="upfile">
+        <input type="submit" value="Upload">
+    </form>
+
+</body>
+</html>

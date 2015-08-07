@@ -94,8 +94,25 @@
     </servlet>
 
     <servlet>
+        <servlet-name>imagetransformDataManager</servlet-name>
+        <servlet-class>com.fezrestia.gae.imagetransform.DataManager</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>imagetransformImageTransformPanel</servlet-name>
+        <servlet-class>com.fezrestia.gae.imagetransform.ImageTransformPanel</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>imagetransformTransformEngine</servlet-name>
+        <servlet-class>com.fezrestia.gae.imagetransform.TransformEngine</servlet-class>
+    </servlet>
+
+    <servlet>
         <servlet-name>utilImageDisplay</servlet-name>
         <servlet-class>com.fezrestia.gae.util.ImageDisplay</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>utilImageUpload</servlet-name>
+        <servlet-class>com.fezrestia.gae.util.ImageUpload</servlet-class>
     </servlet>
     <!-- ===================================================================================== -->
 
@@ -187,8 +204,25 @@
     </servlet-mapping>
 
     <servlet-mapping>
+        <servlet-name>imagetransformDataManager</servlet-name>
+        <url-pattern>/imagetransformDataManager</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>imagetransformImageTransformPanel</servlet-name>
+        <url-pattern>/imagetransformImageTransformPanel</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>imagetransformTransformEngine</servlet-name>
+        <url-pattern>/imagetransformTransformEngine</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
         <servlet-name>utilImageDisplay</servlet-name>
         <url-pattern>/utilImageDisplay</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>utilImageUpload</servlet-name>
+        <url-pattern>/utilImageUpload</url-pattern>
     </servlet-mapping>
     <!-- ===================================================================================== -->
 
