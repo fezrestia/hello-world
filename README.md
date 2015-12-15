@@ -1,2 +1,1 @@
-# hello-world
-Various HelloWorld Projects
+# VARIOUS HELLO-WORLD PROJECTS
