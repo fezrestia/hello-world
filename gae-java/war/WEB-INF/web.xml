@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<web-app
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns="http://java.sun.com/xml/ns/javaee"
+        xmlns:web="http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+        xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
+                http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+        version="2.5"
+>
+    <!-- SERVLET LIST ======================================================================== -->
+    <servlet>
+        <servlet-name>HelloWorld</servlet-name>
+        <servlet-class>com.fezrestia.gae.helloworld.HelloWorldServlet</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>memoMainPage</servlet-name>
+        <servlet-class>com.fezrestia.gae.memo.MainPage</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>memoNew</servlet-name>
+        <servlet-class>com.fezrestia.gae.memo.New</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>dataloadDataManager</servlet-name>
+        <servlet-class>com.fezrestia.gae.dataload.DataManager</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>dataloadFileServer</servlet-name>
+        <servlet-class>com.fezrestia.gae.dataload.FileServer</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>dataloadUpload</servlet-name>
+        <servlet-class>com.fezrestia.gae.dataload.Upload</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>mailLowLevelMailSender</servlet-name>
+        <servlet-class>com.fezrestia.gae.mail.LowLevelMailSender</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>mailJavaMailSender</servlet-name>
+        <servlet-class>com.fezrestia.gae.mail.JavaMailSender</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>mailJavaMailReceiver</servlet-name>
+        <servlet-class>com.fezrestia.gae.mail.JavaMailReceiver</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>imagemailImageMailHandler</servlet-name>
+        <servlet-class>com.fezrestia.gae.imagemail.ImageMailHandler</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>xmppXmppEcho</servlet-name>
+        <servlet-class>com.fezrestia.gae.xmpp.XmppEcho</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>xmppXmpp2Twitter</servlet-name>
+        <servlet-class>com.fezrestia.gae.xmpp.Xmpp2Twitter</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>parsehtmlHtmlParser</servlet-name>
+        <servlet-class>com.fezrestia.gae.parsehtml.HtmlParser</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>twitterbotBotEditor</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.BotEditor</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>twitterbotBotEditorHandler</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.BotEditorHandler</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>twitterbotAuthHandler</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.AuthHandler</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>twitterbotBotList</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.BotList</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>twitterbotBotHandler</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.BotHandler</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>twitterbotCronTaskHandler</servlet-name>
+        <servlet-class>com.fezrestia.gae.twitterbot.CronTaskHandler</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>imagetransformDataManager</servlet-name>
+        <servlet-class>com.fezrestia.gae.imagetransform.DataManager</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>imagetransformImageTransformPanel</servlet-name>
+        <servlet-class>com.fezrestia.gae.imagetransform.ImageTransformPanel</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>imagetransformTransformEngine</servlet-name>
+        <servlet-class>com.fezrestia.gae.imagetransform.TransformEngine</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>utilImageDisplay</servlet-name>
+        <servlet-class>com.fezrestia.gae.util.ImageDisplay</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>utilImageUpload</servlet-name>
+        <servlet-class>com.fezrestia.gae.util.ImageUpload</servlet-class>
+    </servlet>
+    <!-- ===================================================================================== -->
+
+    <!-- URL vs. SERVLET MAP ================================================================= -->
+    <servlet-mapping>
+        <servlet-name>HelloWorld</servlet-name>
+        <url-pattern>/helloworld</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>memoMainPage</servlet-name>
+        <url-pattern>/memoMainPage</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>memoNew</servlet-name>
+        <url-pattern>/memoNew</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>dataloadDataManager</servlet-name>
+        <url-pattern>/dataloadDataManager</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>dataloadFileServer</servlet-name>
+        <url-pattern>/dataloadFileServer</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>dataloadUpload</servlet-name>
+        <url-pattern>/dataloadUpload</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>mailLowLevelMailSender</servlet-name>
+        <url-pattern>/mailLowLevelMailSender</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>mailJavaMailSender</servlet-name>
+        <url-pattern>/mailJavaMailSender</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>mailJavaMailReceiver</servlet-name>
+        <url-pattern>/_ah/mail/*</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>imagemailImageMailHandler</servlet-name>
+        <url-pattern>/_ah/mail/*</url-pattern>
+    </servlet-mapping>
+
+<!--
+    <servlet-mapping>
+        <servlet-name>xmppXmppEcho</servlet-name>
+        <url-pattern>/_ah/xmpp/message/chat/*</url-pattern>
+    </servlet-mapping>
+-->
+    <servlet-mapping>
+        <servlet-name>xmppXmpp2Twitter</servlet-name>
+        <url-pattern>/_ah/xmpp/message/chat/*</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>parsehtmlHtmlParser</servlet-name>
+        <url-pattern>/parsehtmlHtmlParser</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>twitterbotBotEditor</servlet-name>
+        <url-pattern>/twitterbotBotEditor</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>twitterbotBotEditorHandler</servlet-name>
+        <url-pattern>/twitterbotBotEditorHandler</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>twitterbotAuthHandler</servlet-name>
+        <url-pattern>/authenticated</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>twitterbotBotList</servlet-name>
+        <url-pattern>/twitterbotBotList</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>twitterbotBotHandler</servlet-name>
+        <url-pattern>/twitterbotBotHandler</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>twitterbotCronTaskHandler</servlet-name>
+        <url-pattern>/twitterbotCronTaskHandler</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>imagetransformDataManager</servlet-name>
+        <url-pattern>/imagetransformDataManager</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>imagetransformImageTransformPanel</servlet-name>
+        <url-pattern>/imagetransformImageTransformPanel</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>imagetransformTransformEngine</servlet-name>
+        <url-pattern>/imagetransformTransformEngine</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>utilImageDisplay</servlet-name>
+        <url-pattern>/utilImageDisplay</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>utilImageUpload</servlet-name>
+        <url-pattern>/utilImageUpload</url-pattern>
+    </servlet-mapping>
+    <!-- ===================================================================================== -->
+
+    <!-- SECURITY ============================================================================ -->
+    <security-constraint>
+        <web-resource-collection>
+            <url-pattern>/_ah/mail/*</url-pattern>
+        </web-resource-collection>
+        <auth-constraint>
+            <role-name>admin</role-name>
+        </auth-constraint>
+    </security-constraint>
+    <security-constraint>
+        <web-resource-collection>
+            <url-pattern>/twitterbotBotList</url-pattern>
+            <url-pattern>/twitterbotBotEditor</url-pattern>
+            <url-pattern>/twitterbotBotEditorHandler</url-pattern>
+        </web-resource-collection>
+        <auth-constraint>
+            <role-name>*</role-name>
+        </auth-constraint>
+    </security-constraint>
+    <!-- ===================================================================================== -->
+
+    <!-- ENTRANCE HTML ======================================================================= -->
+    <welcome-file-list>
+        <welcome-file>index.html</welcome-file>
+    </welcome-file-list>
+    <!-- ===================================================================================== -->
+
+</web-app>

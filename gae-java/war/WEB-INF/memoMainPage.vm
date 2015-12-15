@@ -1,0 +1,29 @@
+<html>
+<body>
+
+    <span style="font-size: 200%">MEMO</span>
+
+    #if ( $user )
+        <span> for $user </span>
+        <a href="$signOutUrl">Logout</a>
+    #else
+        <span> for Anonymous Cowards </span>
+        <a href="$signInUrl">Login</a>
+    #end
+
+    <form action="/memoNew" method="post">
+        <div>
+            <textarea name="content" rows="2" cols="40"></textarea>
+        </div>
+        <input type="submit" value="SUBMIT"/>
+    </form>
+
+    #foreach ($memo in $memos)
+        <div>
+            <span class="Date">$_datetimeFormat.format($memo.date)</span>
+            <pre>$memo.content</pre>
+        </div>
+    #end
+
+</body>
+</html>

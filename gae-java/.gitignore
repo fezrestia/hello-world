@@ -1,0 +1,15 @@
+# Eclipse related.
+.settings/
+.classpath
+.project
+
+# Google App Engine related.
+war/WEB-INF/appengine-generated/
+war/WEB-INF/classes/
+
+# ANT related.
+local.properties
+
+# Private info.
+src/com/fezrestia/PrivateConstants.java
+
