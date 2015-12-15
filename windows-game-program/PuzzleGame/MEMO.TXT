@@ -1,0 +1,51 @@
+PuzzleGame TODO:
+
+- STAGE
+# . o O p P _ のみで構成
+
+□起動時ステージ表示
+　→DONE
+
+□入力受付後再度表示
+　→DONE
+
+□前回のステージ表示と同じ場所に表示
+　→コマンドプロンプトのclsをsystem()から使う
+　　→DONE
+
+
+- PLAYER
+
+□表示は'p'，'.'の上にあるときは表示が'P'になる
+　→DONE
+
+□Playerの初期位置を取得
+　→DONE
+
+□上下左右の入力を受けて移動
+　→DONE
+
+□壁には移動できない
+　→DONE
+
+□Objectに移動する場合，Objectも同じ方向に移動する
+　→DONE
+
+□Objectの先に壁かObjectがある場合は移動できない
+　→DONE
+
+
+
+- OBJECT
+
+□表示は'o'，'.'の上にあるときは表示が'O'になる
+　→DONE
+
+□Playerの移動によって移動される
+　→DONE
+
+□壁には移動できない
+　→DONE
+
+□Objectには移動できない
+　→DONE
