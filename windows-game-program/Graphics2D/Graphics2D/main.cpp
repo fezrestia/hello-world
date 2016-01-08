@@ -80,7 +80,9 @@ const int STAGE_SIZE = STAGE_WIDTH * STAGE_HEIGHT;
 
 const int CELL_SIZE = 32;
 
-const int ANIMATION_PROGRESS_STRIDE = 10;
+//const int ANIMATION_PROGRESS_STRIDE = 10;
+
+const int MOVE_INTERVAL_MILLIS = 500;
 
 class CellInfo {
 public:
@@ -91,7 +93,8 @@ public:
             mCell(Cell::CELL_UNKNOWN),
             mPrevDiffX(0),
             mPrevDiffY(0),
-            mAnimationProgress(100) {
+//            mAnimationProgress(100),
+            mElapsedTimeMillis(0) {
         // NOP.
     }
 
@@ -133,7 +136,8 @@ public:
         mPrevDiffY = diffY;
 
         // Reset.
-        mAnimationProgress = 0;
+//        mAnimationProgress = 0;
+        mElapsedTimeMillis = 0;
     }
 
     /**
@@ -141,23 +145,31 @@ public:
      *
      * @param diffPixX [OUT]
      * @param diffPixY [OUT]
+     * @param diffTimeMillis [IN]
      */
     void getAnimatingDiffPixel(
             int* diffPixX,
-            int* diffPixY) {
+            int* diffPixY,
+            unsigned int diffTimeMillis) {
         int maxDiffPixX = mPrevDiffX * CELL_SIZE;
         int maxDiffPixY = mPrevDiffY * CELL_SIZE;
 
 //        cout << "mPrevDiffX/Y = " << mPrevDiffX << '/' << mPrevDiffY << endl;
 //        cout << "src diffPixX/Y = " << *diffPixX << '/' << *diffPixY << endl;
 //        cout << "mAnimationProgress = " << mAnimationProgress << endl;
+//        cout << "mElapsedTimeMillis = " << mElapsedTimeMillis << endl;
 
-        *diffPixX = (100 - mAnimationProgress) * maxDiffPixX / 100;
-        *diffPixY = (100 - mAnimationProgress) * maxDiffPixY / 100;
+//        *diffPixX = (100 - mAnimationProgress) * maxDiffPixX / 100;
+//        *diffPixY = (100 - mAnimationProgress) * maxDiffPixY / 100;
+        *diffPixX = (MOVE_INTERVAL_MILLIS - mElapsedTimeMillis) * maxDiffPixX
+                / MOVE_INTERVAL_MILLIS;
+        *diffPixY = (MOVE_INTERVAL_MILLIS - mElapsedTimeMillis) * maxDiffPixY
+                / MOVE_INTERVAL_MILLIS;
 
 //        cout << "diffPixX/Y = " << *diffPixX << '/' << *diffPixY << endl;
 
-        mAnimationProgress += ANIMATION_PROGRESS_STRIDE;
+//        mAnimationProgress += ANIMATION_PROGRESS_STRIDE;
+        mElapsedTimeMillis += diffTimeMillis;
     }
 
     /**
@@ -166,7 +178,8 @@ public:
      * @return
      */
     bool isAnimating() {
-        return mAnimationProgress < 100;
+//        return mAnimationProgress < 100;
+        return mElapsedTimeMillis < MOVE_INTERVAL_MILLIS;
     }
 
 private:
@@ -176,7 +189,9 @@ private:
     int mPrevDiffX;
     int mPrevDiffY;
     // Animation progress from last to current. (0-100)
-    int mAnimationProgress;
+//    int mAnimationProgress;
+    // Elapsed time millis.
+    int mElapsedTimeMillis;
 };
 
 fezrestia::ArrayXY<CellInfo>* gCurrentStage = NULL;
@@ -690,7 +705,7 @@ void renderScreen() {
     }
 }
 
-void renderScreenWithGraphics() {
+void renderScreenWithGraphics(unsigned int elapsedTimeStrideMillis) {
     for (int y = 0; y < STAGE_HEIGHT; ++y) {
         for (int x = 0; x < STAGE_WIDTH; ++x) {
             CellInfo& cellInfo = (*gCurrentStage)(x, y);
@@ -744,7 +759,7 @@ void renderScreenWithGraphics() {
                     int diffX = 0;
                     int diffY = 0;
                     if (cellInfo.isAnimating()) {
-                        cellInfo.getAnimatingDiffPixel(&diffX, &diffY);
+                        cellInfo.getAnimatingDiffPixel(&diffX, &diffY, elapsedTimeStrideMillis);
                     }
 
                     Cell renderingCell = cellInfo.getCell();
@@ -777,10 +792,10 @@ void renderScreenWithGraphics() {
     }
 }
 
-void render() {
+void render(unsigned int elapsedTimeStrideMillis) {
 //    renderConsole();
 //    renderScreen();
-    renderScreenWithGraphics();
+    renderScreenWithGraphics(elapsedTimeStrideMillis);
 }
 
 void finalize() {
@@ -798,14 +813,15 @@ void Framework::update() {
     // Initializer.
     if (gCurrentStage == NULL) {
         initialize();
-        render();
+        render(MOVE_INTERVAL_MILLIS);
         return;
     }
 
     // FPS.
     unsigned int currentTimestamp = Framework::instance().time();
+    unsigned int interval = MOVE_INTERVAL_MILLIS;
     if (gPreviousTimestamp != 0) {
-        unsigned int interval = currentTimestamp - gPreviousTimestamp;
+        interval = currentTimestamp - gPreviousTimestamp;
         unsigned int fps = 1000 / interval;
         cout << "FPS=" << fps << endl;
     }
@@ -821,7 +837,7 @@ void Framework::update() {
 
     getInput();
     updateState();
-    render();
+    render(interval);
 
     // FPS.
     unsigned int outTimestamp = Framework::instance().time();
