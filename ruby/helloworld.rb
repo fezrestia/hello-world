@@ -181,8 +181,63 @@ end
 
 require_relative "./rabbit"
 
-rabbit1 = Rabbit.new
-rabbit2 = Rabbit.new
+=begin
+rabbits = []
 
-p rabbit1
-p rabbit2
+rabbits.push(Rabbit.new)
+rabbits.push(Rabbit.new(name: "pyonkichi"))
+rabbits.push(Rabbit.new(name: "inaba", color: :brown, length_of_ears: 7))
+
+rabbits.each do |rabbit|
+    puts rabbit.name
+    puts rabbit.color
+    puts rabbit.length_of_ears
+
+    rabbit.say_name
+    puts ""
+end
+
+rabbits[0].name = "wooser"
+puts rabbits[0].name
+
+puts ""
+
+rabbit = Rabbit.new
+lop = LopEar.new(name: "lopchan")
+
+[rabbit, lop].each do |r|
+    r.say_name
+    r.print_ears
+end
+=end
+
+=begin
+rabbit = Rabbit.new
+puts rabbit.to_s
+
+lop = LopEar.new
+puts lop.to_s
+
+lop.print_class_constants_and_variables
+
+rabbit.print_description
+lop.print_description
+=end
+
+
+#Rabbit.new.Walk
+#Duck.new.Walk
+#Hamster.new.Walk
+
+
+rabbits = Array.new.tap do |array|
+    [7.0, 1.0, 5.0, 1.0].each do |length|
+        array << Rabbit.new(length_of_ears: length)
+    end
+end
+
+rabbits.each_with_index do |rabbit, i|
+    puts "rabbit#{i}: #{rabbit.length_of_ears}"
+end
+
+puts rabbits.sort
