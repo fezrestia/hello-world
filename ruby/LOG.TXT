@@ -1,0 +1,391 @@
+HELLO WORLD !
+
+ARGV[0] : 
+ARGV[1] : 
+KCODE=ARGV[0] != 0
+
+Just 0
+
+argNum is 0
+
+Jus 0
+
+1
+2
+4
+5
+
+4
+3
+2
+1
+0
+
+alpha
+beta
+chary
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+1
+2
+3
+SIZE=3
+LEN =3
+
+..
+1
+2
+3
+4
+5
+...
+1
+2
+3
+4
+in +=10
+
+2
+4
+6
+8
+alpha
+beta
+char
+delta
+eta
+0 : alpha
+1 : beta
+2 : char
+3 : delta
+4 : eta
+eta
+delta
+char
+beta
+alpha
+
+H
+e
+l
+l
+o
+ 
+W
+o
+r
+l
+d
+ 
+!
+Hello
+World
+
+
+usachan
+white
+10
+Hello, I am usachan !
+
+pyonkichi
+white
+10
+Hello, I am pyonkichi !
+
+inaba
+brown
+7
+Hello, I am inaba !
+
+wooser
+
+Hello, I am usachan !
+^-^
+Hello, I am lopchan !
+U-U
+
+Name=usachan, Color=white, LengthOfEars=10, AllCount=6
+Name=usachan, Color=white, LengthOfEars=10, AllCount=7
+DEFAULT_NAME: usachan
+DEFAULT_COLOR: white
+DEFAULT_LENGTH_OF_EAR: 10
+DESCRIPTION: Lop ear is rabit with lopped ear.
+@@count: 7
+Rabitt is pretty animal with long ears.
+Lop ear is rabit with lopped ear.
+
+Pyoko Pyoko
+Tote Tote
+Tote Tote
+
+rabbit0: 7.0
+rabbit1: 1.0
+rabbit2: 5.0
+rabbit3: 1.0
+Name=usachan, Color=white, LengthOfEars=1.0, AllCount=12
+Name=usachan, Color=white, LengthOfEars=1.0, AllCount=12
+Name=usachan, Color=white, LengthOfEars=5.0, AllCount=12
+Name=usachan, Color=white, LengthOfEars=7.0, AllCount=12
+
+ERR | 0 | unknown | TAG:EVENT
+1 ->
+pyonpyon
+2 ->
+pyonpyon
+3 ->
+pyonpyon
+
+2
+5
+8
+11
+14
+[2, 5, 8, 11, 14]
+
+meow
+quack
+oink
+bowwow
+cluck
+
+1 ->
+quack
+2 ->
+quack
+3 ->
+quack
+1 ->
+meow
+2 ->
+meow
+3 ->
+meow
+
+return from Proc.new
+return from fuga
+
+#<Proc:0x000000026b4e08@helloworld.rb:338 (lambda)>
+5
+#<Proc:0x000000026b4ca0@helloworld.rb:338 (lambda)>
+5
+#<Proc:0x000000026b4a98@helloworld.rb:338 (lambda)>
+5
+============
+#<Proc:0x000000026b4930@helloworld.rb:338 (lambda)>
+5
+#<Proc:0x000000026b4930@helloworld.rb:338 (lambda)>
+10
+#<Proc:0x000000026b4930@helloworld.rb:338 (lambda)>
+15
+
+
+ReTry...
+tea
+There are no errors
+Ensure
+
+
+
+//HELLO WORLD !//
+////
+//ARGV[0] : //
+//ARGV[1] : //
+//KCODE=ARGV[0] != 0//
+////
+//Just 0//
+////
+//argNum is 0//
+////
+//Jus 0//
+////
+//1//
+//2//
+//4//
+//5//
+////
+//4//
+//3//
+//2//
+//1//
+//0//
+////
+//alpha//
+//beta//
+//chary//
+//1//
+//2//
+//3//
+//4//
+//5//
+//6//
+//7//
+//8//
+//9//
+//10//
+////
+//1//
+//2//
+//3//
+//SIZE=3//
+//LEN =3//
+////
+//..//
+//1//
+//2//
+//3//
+//4//
+//5//
+//...//
+//1//
+//2//
+//3//
+//4//
+//in +=10//
+////
+//2//
+//4//
+//6//
+//8//
+//alpha//
+//beta//
+//char//
+//delta//
+//eta//
+//0 : alpha//
+//1 : beta//
+//2 : char//
+//3 : delta//
+//4 : eta//
+//eta//
+//delta//
+//char//
+//beta//
+//alpha//
+////
+//H//
+//e//
+//l//
+//l//
+//o//
+// //
+//W//
+//o//
+//r//
+//l//
+//d//
+// //
+//!//
+//Hello//
+//World//
+////
+////
+//usachan//
+//white//
+//10//
+//Hello, I am usachan !//
+////
+//pyonkichi//
+//white//
+//10//
+//Hello, I am pyonkichi !//
+////
+//inaba//
+//brown//
+//7//
+//Hello, I am inaba !//
+////
+//wooser//
+////
+//Hello, I am usachan !//
+//^-^//
+//Hello, I am lopchan !//
+//U-U//
+////
+//Name=usachan, Color=white, LengthOfEars=10, AllCount=6//
+//Name=usachan, Color=white, LengthOfEars=10, AllCount=7//
+//DEFAULT_NAME: usachan//
+//DEFAULT_COLOR: white//
+//DEFAULT_LENGTH_OF_EAR: 10//
+//DESCRIPTION: Lop ear is rabit with lopped ear.//
+//@@count: 7//
+//Rabitt is pretty animal with long ears.//
+//Lop ear is rabit with lopped ear.//
+////
+//Pyoko Pyoko//
+//Tote Tote//
+//Tote Tote//
+////
+//rabbit0: 7.0//
+//rabbit1: 1.0//
+//rabbit2: 5.0//
+//rabbit3: 1.0//
+//Name=usachan, Color=white, LengthOfEars=1.0, AllCount=12//
+//Name=usachan, Color=white, LengthOfEars=1.0, AllCount=12//
+//Name=usachan, Color=white, LengthOfEars=5.0, AllCount=12//
+//Name=usachan, Color=white, LengthOfEars=7.0, AllCount=12//
+////
+//ERR | 0 | unknown | TAG:EVENT//
+//1 ->//
+//pyonpyon//
+//2 ->//
+//pyonpyon//
+//3 ->//
+//pyonpyon//
+////
+//2//
+//5//
+//8//
+//11//
+//14//
+//[2, 5, 8, 11, 14]//
+////
+//meow//
+//quack//
+//oink//
+//bowwow//
+//cluck//
+////
+//1 ->//
+//quack//
+//2 ->//
+//quack//
+//3 ->//
+//quack//
+//1 ->//
+//meow//
+//2 ->//
+//meow//
+//3 ->//
+//meow//
+////
+//return from Proc.new//
+//return from fuga//
+////
+//#<Proc:0x000000026b4e08@helloworld.rb:338 (lambda)>//
+//5//
+//#<Proc:0x000000026b4ca0@helloworld.rb:338 (lambda)>//
+//5//
+//#<Proc:0x000000026b4a98@helloworld.rb:338 (lambda)>//
+//5//
+//============//
+//#<Proc:0x000000026b4930@helloworld.rb:338 (lambda)>//
+//5//
+//#<Proc:0x000000026b4930@helloworld.rb:338 (lambda)>//
+//10//
+//#<Proc:0x000000026b4930@helloworld.rb:338 (lambda)>//
+//15//
+
+1 : helloworld.rb
+2 : log.rb
+3 : LOG.TXT
+4 : rabbit.rb
+
