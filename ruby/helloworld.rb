@@ -8,6 +8,7 @@
 Injected Document
 =end
 
+=begin
 
 puts 'HELLO WORLD !'
 #print("hello world !\n")
@@ -567,3 +568,42 @@ end
 
 Process.waitall
 puts "it takes #{Time.now.to_i - startedTime} sec"
+
+
+
+method_name = ARGV[0]
+
+define_method method_name do
+    puts "This method is named #{method_name}."
+end
+
+alice
+
+=end
+
+array = []
+
+def array.append_randomized_number
+    self << rand(10)
+end
+
+p array.respond_to?(:append_randomized_number)
+p Array.new.respond_to?(:append_randomized_number)
+
+10.times { array.append_randomized_number }
+p array
+
+puts
+
+require_relative "./rabbit.rb"
+
+def Rabbit.colors
+    [:black, :brown, :white, :mixed]
+end
+
+p Rabbit.colors
+p Rabbit.static_colors
+
+require_relative "./log.rb"
+
+Log.output(level: "ERR", tag: "TAG", event: "EVENT")

@@ -5,10 +5,12 @@
 # Log Functionalities
 
 class Log
+    class << self
 
 #private
-    def output(level:, timestamp: 0, thread: "unknown", tag:, event:)
-        puts "#{level} | #{timestamp} | #{thread} | #{tag}:#{event}"
-    end
+        def output(level:, timestamp: 0, thread: "unknown", tag:, event:)
+            puts "#{level} | #{timestamp} | #{thread} | #{tag}:#{event}"
+        end
 
-end
+    end # class << self
+end # class Log

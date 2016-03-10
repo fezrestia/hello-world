@@ -34,6 +34,10 @@ class Rabbit
 
     public
 
+    def self.static_colors
+        [:red, :green, :blue]
+    end
+
     # CONSTRUCTOR
     def initialize(
             name: DEFAULT_NAME,
