@@ -1,0 +1,25 @@
+
+<h1>User List</h1>
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Department</ht>
+        </tr>
+    </thead>
+
+    <tbody>
+        <% @users.each do | user | %>
+            <tr>
+                <td><%= user.name %></td>
+                <td><%= user.department %></td>
+                <td><%= link_to 'EDIT', edit_user_path(user) %>
+                <td><%= link_to 'DEL', user_path(user), method: 'DELETE' %>
+            </tr>
+        <% end %>
+        <%= link_to 'Register New User', new_user_path %>
+    </tbody>
+
+</table>
+

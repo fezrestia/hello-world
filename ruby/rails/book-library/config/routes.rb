@@ -1,4 +1,14 @@
-Rails.application.routes.draw do
+
+BookLibrary::Application.routes.draw do
+    resources :books
+#    resources :users, only: %i(index new create)
+    resources :users
+end
+
+
+
+#Rails.application.routes.draw do
+#  resources :books
   # The priority is based upon order of creation: first created -> highest priority.
   # See how all your routes lay out with "rake routes".
 
@@ -53,4 +63,5 @@ Rails.application.routes.draw do
   #     # (app/controllers/admin/products_controller.rb)
   #     resources :products
   #   end
-end
+#end
+
