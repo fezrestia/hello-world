@@ -3,6 +3,11 @@ BookLibrary::Application.routes.draw do
     resources :books
 #    resources :users, only: %i(index new create)
     resources :users
+
+    get 'admin' => 'admin/books#index'
+
+    get 'admin/:id' => 'admin/books#show'
+
 end
 
 
