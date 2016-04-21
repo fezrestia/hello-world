@@ -8,6 +8,8 @@ BookLibrary::Application.routes.draw do
 
     get 'admin/:id' => 'admin/books#show'
 
+    post 'admin' => 'admin/books#create'
+
 end
 
 

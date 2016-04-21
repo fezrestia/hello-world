@@ -9,7 +9,7 @@ class Book < ActiveRecord::Base
 
 private
     def increment_user_books_size
-        self.user.increment!(:books_size)
+#        self.user.increment!(:books_size)
     end
 
 end
