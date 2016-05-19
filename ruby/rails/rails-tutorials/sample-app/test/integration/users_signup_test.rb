@@ -14,6 +14,12 @@ class UsersSignupTest < ActionDispatch::IntegrationTest
     end
 
     assert_template 'users/new'
+
+    # Error messages
+    assert_select 'div#error_explanation'
+    assert_select 'div.alert'
+    assert_select 'div.alert-danger'
+
   end
 
   test "valid signup information" do
@@ -28,6 +34,10 @@ class UsersSignupTest < ActionDispatch::IntegrationTest
     end
 
     assert_template 'users/show'
+
+    # Flash messages
+    assert_not flash[:success].empty?
+
   end
 
 end
