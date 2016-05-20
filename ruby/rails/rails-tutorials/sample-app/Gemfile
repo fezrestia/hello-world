@@ -20,6 +20,11 @@ gem 'sdoc', '~> 0.4.0', group: :doc
 gem 'bootstrap-sass'
 # For password hash.
 gem 'bcrypt'
+# Generate sample users.
+gem 'faker'
+# Pagination view.
+gem 'will_paginate'
+gem 'bootstrap-will_paginate'
 
 group :development, :test do
   # Use sqlite3 as the database for Active Record
