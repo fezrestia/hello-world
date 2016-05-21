@@ -5,3 +5,8 @@ rachael:
     email: rachael.dolly@esheep.com
     password_digest: <%= User.digest('password') %>
 
+kanna:
+    name: Kurara Kanna
+    email: kurara.kanna@slx.com
+    password_digest: <%= User.digest('password') %>
+

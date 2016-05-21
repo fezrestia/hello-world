@@ -10,7 +10,9 @@ class SessionsController < ApplicationController
 
       log_in @user
       params[:session][:remember_me] == '1' ? remember(@user) : forget(@user)
-      redirect_to @user
+
+      # Redirect to requested URL or default route.
+      redirect_back_or @user
     else
       # Log in failure
 

@@ -50,5 +50,24 @@ module SessionsHelper
     !current_user.nil?
   end
 
+  # Current user or not.
+  #
+  def current_user?(user)
+    user == current_user
+  end
+
+  # Redirect to stored URL or default.
+  #
+  def redirect_back_or(default)
+    redirect_to(session[:forwarding_url] || default)
+    session.delete(:forwarding_url)
+  end
+
+  # Store URL.
+  #
+  def store_location
+    session[:forwarding_url] = request.url if request.get?
+  end
+
 end
 
