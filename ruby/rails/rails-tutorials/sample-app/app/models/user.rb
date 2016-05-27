@@ -3,6 +3,8 @@ class User < ActiveRecord::Base
   has_secure_password
 
   attr_accessor :remember_token
+  attr_accessor :activation_token
+
 
   # Validation
   #
@@ -20,12 +22,13 @@ class User < ActiveRecord::Base
       length: { minimum: 6 },
       allow_nil: true
 
-  # Callback
+  # Before save callback.
   #
-  before_save {
-#    self.email = email.downcase
-    email.downcase!
-  }
+  before_save :downcase_email
+
+  # Before create callback.
+  #
+  before_create :create_activation_digest
 
   # Return hashed string.
   #
@@ -50,9 +53,10 @@ class User < ActiveRecord::Base
 
   # Check remember token is valid or not.
   #
-  def authenticated?(remember_token)
-    return false if remember_digest.nil?
-    return BCrypt::Password.new(remember_digest).is_password?(remember_token)
+  def authenticated?(attribute, token)
+    digest = send("#{attribute}_digest")
+    return false if digest.nil?
+    return BCrypt::Password.new(digest).is_password?(token)
   end
 
   # Remove user's log in token
@@ -60,6 +64,30 @@ class User < ActiveRecord::Base
   def forget
     update_attribute(:remember_digest, nil)
   end
+
+  # Activate user.
+  #
+  def activate
+    update_attribute(:activated, true)
+    update_attribute(:activated_at, Time.zone.now)
+  end
+
+  # Send activation mail.
+  #
+  def send_activation_email
+    UserMailer.account_activation(self).deliver_now
+  end
+
+  private
+
+    def downcase_email
+      self.email = email.downcase
+    end
+
+    def create_activation_digest
+      self.activation_token = User.new_token
+      self.activation_digest = User.digest(activation_token)
+    end
 
 end
 
