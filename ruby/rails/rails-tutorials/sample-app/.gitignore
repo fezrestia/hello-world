@@ -26,3 +26,6 @@ doc/
 .idea
 .secret
 
+# Ignore local uploaded files.
+/public/uploads
+
