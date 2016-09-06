@@ -2,6 +2,19 @@ class User < ActiveRecord::Base
 
   has_many :microposts, dependent: :destroy
 
+  has_many :active_relationships,
+      class_name: "Relationship",
+      foreign_key: "follower_id",
+      dependent: :destroy
+
+  has_many :passive_relationships,
+      class_name: "Relationship",
+      foreign_key: "followed_id",
+      dependent: :destroy
+
+  has_many :following, through: :active_relationships, source: :followed
+  has_many :followers, through: :passive_relationships, source: :follower
+
   has_secure_password
 
   attr_accessor :remember_token
@@ -104,7 +117,26 @@ class User < ActiveRecord::Base
   # Feed.
   #
   def feed
-    Micropost.where("user_id = ?", id)
+    following_ids = "SELECT followed_id FROM relationships WHERE follower_id = :user_id"
+    Micropost.where("user_id IN (#{following_ids}) OR user_id = :user_id", user_id: id)
+  end
+
+  # Follow other user.
+  #
+  def follow(other_user)
+    active_relationships.create(followed_id: other_user.id)
+  end
+
+  # Unfollow other user.
+  #
+  def unfollow(other_user)
+    active_relationships.find_by(followed_id: other_user.id).destroy
+  end
+
+  # Check following the user or not.
+  #
+  def following?(other_user)
+    following.include?(other_user)
   end
 
   private
