@@ -8,10 +8,17 @@
 >
 
     <Button
-        android:id="@+id/key1"
+        android:id="@+id/legacy"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="KEY 1"
+        android:text="Bluetooth Legacy"
+    />
+
+    <Button
+        android:id="@+id/ble"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Bluetooth LE"
     />
 
 </LinearLayout>
