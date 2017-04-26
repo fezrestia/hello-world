@@ -27,6 +27,8 @@ public class RootActivity extends Activity {
     // Log flag.
     public static final boolean IS_DEBUG = false || Log.IS_DEBUG;
 
+    private Handler mHandler = new Handler();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         if (IS_DEBUG) Log.logDebug(TAG, "onCreate() : E");
@@ -36,8 +38,10 @@ public class RootActivity extends Activity {
 
         Button keyLegacy = (Button) findViewById(R.id.legacy);
         keyLegacy.setOnClickListener(new KeyLegacyOnClickListener());
-        Button keyBle = (Button) findViewById(R.id.ble);
-        keyBle.setOnClickListener(new KeyBleOnClickListener());
+        Button keyBleSetUp = (Button) findViewById(R.id.ble_setup);
+        keyBleSetUp.setOnClickListener(new KeyBleSetUpOnClickListener());
+        Button keyBleDrive0 = (Button) findViewById(R.id.ble_drive_0);
+        keyBleDrive0.setOnClickListener(new KeyBleDrive0OnClickListener());
 
         if (IS_DEBUG) Log.logDebug(TAG, "onCreate() : X");
     }
@@ -284,9 +288,6 @@ public class RootActivity extends Activity {
             if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
 
             mBleGattIO.onRequestDone();
-
-//            mTargetCharaList.get(0).setValue(10, BluetoothGattCharacteristic.FORMAT_SINT8, 0);
-//            mBleGattIO.requestWriteChara(mTargetGatt, mTargetCharaList.get(0));
         }
 
         @Override
@@ -343,10 +344,10 @@ public class RootActivity extends Activity {
         }
     }
 
-    private class KeyBleOnClickListener implements View.OnClickListener {
+    private class KeyBleSetUpOnClickListener implements View.OnClickListener {
         @Override
         public void onClick(View view) {
-            if (IS_DEBUG) Log.logDebug(TAG, "KeyBleOnClickListener.onClick() : E");
+            if (IS_DEBUG) Log.logDebug(TAG, "KeyBleSetUpOnClickListener.onClick() : E");
 
             if (mBleDeviceScanner.isScanning()) {
                 if (IS_DEBUG) Log.logDebug(TAG, "Stop BLE scan.");
@@ -356,7 +357,48 @@ public class RootActivity extends Activity {
                 mBleDeviceScanner.start();
             }
 
-            if (IS_DEBUG) Log.logDebug(TAG, "KeyBleOnClickListener.onClick() : X");
+            if (IS_DEBUG) Log.logDebug(TAG, "KeyBleSetUpOnClickListener.onClick() : X");
         }
     }
+
+    private class KeyBleDrive0OnClickListener implements View.OnClickListener {
+        @Override
+        public void onClick(View view) {
+            if (IS_DEBUG) Log.logDebug(TAG, "KeyBleDrive0OnClickListener.onClick() : E");
+
+            mHandler.post(new EngineUpdateTask());
+
+            if (IS_DEBUG) Log.logDebug(TAG, "KeyBleDrive0OnClickListener.onClick() : X");
+        }
+    }
+
+    int mValue = 0;
+    int mStep = 10;
+
+    private class EngineUpdateTask implements Runnable {
+        @Override
+        public void run() {
+
+            BluetoothGattCharacteristic chara = mTargetCharaList.get(0);
+
+            mValue += mStep;
+            if (mValue >= 250) {
+                mStep = -10;
+            }
+            if (mValue < 0) {
+                mValue = 0;
+                mStep = 10;
+            }
+
+            chara.setValue(mValue, BluetoothGattCharacteristic.FORMAT_SINT8, 0);
+            mBleGattIO.requestWriteChara(mTargetGatt, chara);
+
+            if (mValue != 0) {
+                mHandler.postDelayed(this, 1000);
+            }
+        }
+    }
+
+
+
 }

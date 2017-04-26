@@ -181,6 +181,7 @@ public class BtBleLog {
                 sb.append("     CHARA UUID = ").append(chara.getUuid()).append("\n");
                 sb.append("     PERMISSION = ").append(getCharaPermLogStr(chara)).append("\n");
                 sb.append("          PROPS = ").append(getCharaPropLogStr(chara)).append("\n");
+                sb.append("     WRITE TYPE = ").append(getCharaWriteTypeLogStr(chara)).append("\n");
 
                 String valStr = ByteUtil.byte2HexStr(chara.getValue());
                 if (valStr == null) valStr = "N/A";
@@ -224,6 +225,7 @@ public class BtBleLog {
         sb.append("           UUID = ").append(chara.getUuid()).append("\n");
         sb.append("     PERMISSION = ").append(getCharaPermLogStr(chara)).append("\n");
         sb.append("          PROPS = ").append(getCharaPropLogStr(chara)).append("\n");
+        sb.append("     WRITE TYPE = ").append(getCharaWriteTypeLogStr(chara)).append("\n");
 
         String valStr = ByteUtil.byte2HexStr(chara.getValue());
         if (valStr == null) valStr = "N/A";
@@ -257,6 +259,24 @@ public class BtBleLog {
      */
     public static void logGattDescriptor(String logtag, BluetoothGattDescriptor desc) {
         Log.logDebug(logtag, desc.toString());
+    }
+
+    private static String getCharaWriteTypeLogStr(BluetoothGattCharacteristic chara) {
+        int type = chara.getWriteType();
+
+        switch (type) {
+            case BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT:
+                return "DEFAULT";
+
+            case BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE:
+                return "NO_RESPOSE";
+
+            case BluetoothGattCharacteristic.WRITE_TYPE_SIGNED:
+                return "SIGNED";
+
+            default:
+                return "UNEXPECTED";
+        }
     }
 
     private static String getCharaPermLogStr(BluetoothGattCharacteristic chara) {

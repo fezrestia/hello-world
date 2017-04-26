@@ -15,10 +15,17 @@
     />
 
     <Button
-        android:id="@+id/ble"
+        android:id="@+id/ble_setup"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Bluetooth LE"
+        android:text="Bluetooth LE SetUp"
+    />
+
+    <Button
+        android:id="@+id/ble_drive_0"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Bluetooth LE Drive 0"
     />
 
 </LinearLayout>
