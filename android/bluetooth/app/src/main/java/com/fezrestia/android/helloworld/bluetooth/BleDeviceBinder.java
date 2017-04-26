@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 
@@ -31,6 +32,8 @@ public class BleDeviceBinder {
         void onDisconnected();
         void onCharaRead(BluetoothGattCharacteristic chara);
         void onCharaWrite(BluetoothGattCharacteristic chara);
+        void onDescRead(BluetoothGattDescriptor desc);
+        void onDescWrite(BluetoothGattDescriptor desc);
 
 
 
@@ -149,7 +152,40 @@ public class BleDeviceBinder {
             if (mCallback != null) mCallback.onCharaWrite(characteristic);
         }
 
+        @Override
+        public void onDescriptorRead(
+                BluetoothGatt gatt,
+                BluetoothGattDescriptor descriptor,
+                int status) {
+            super.onDescriptorRead(gatt, descriptor, status);
+            if (IS_DEBUG) Log.logDebug(TAG, "BleGattCallback.onDescriptorRead()");
 
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                if (IS_DEBUG) Log.logDebug(TAG, "    status == GATT_SUCCESS");
+            } else {
+                if (IS_DEBUG) Log.logDebug(TAG, "    status != GATT_SUCCESS");
+            }
 
+            // Callback.
+            if (mCallback != null) mCallback.onDescRead(descriptor);
+        }
+
+        @Override
+        public void onDescriptorWrite(
+                BluetoothGatt gatt,
+                BluetoothGattDescriptor descriptor,
+                int status) {
+            super.onDescriptorWrite(gatt, descriptor, status);
+            if (IS_DEBUG) Log.logDebug(TAG, "BleGattCallback.onDescriptorWrite()");
+
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                if (IS_DEBUG) Log.logDebug(TAG, "    status == GATT_SUCCESS");
+            } else {
+                if (IS_DEBUG) Log.logDebug(TAG, "    status != GATT_SUCCESS");
+            }
+
+            // Callback.
+            if (mCallback != null) mCallback.onDescWrite(descriptor);
+        }
     }
 }

@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.content.Context;
@@ -16,6 +17,8 @@ import android.widget.Button;
 
 import com.fezrestia.android.util.log.Log;
 
+import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 
 public class RootActivity extends Activity {
@@ -102,12 +105,14 @@ public class RootActivity extends Activity {
     private BtIntentReceiver mBtReceiver = null;
     private BleDeviceScanner mBleDeviceScanner = null;
     private BleDeviceBinder mBleDeviceBinder = null;
+    private BleGattIO mBleGattIO = null;
 
     // Target.
     private BluetoothDevice mTargetDevice;
     private BluetoothGatt mTargetGatt;
     private BluetoothGattService mTargetService;
-    private BluetoothGattCharacteristic mTargetChara;
+    private List<BluetoothGattCharacteristic> mTargetCharaList = new ArrayList<>();
+    private List<BluetoothGattDescriptor> mTargetDescList = new ArrayList<>();
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -164,6 +169,7 @@ public class RootActivity extends Activity {
                 mBtAdapter,
                 new BleDeviceScannerCallbackImpl(),
                 new Handler());
+        mBleGattIO = new BleGattIO();
 
         if (IS_DEBUG) Log.logDebug(TAG, "startBluetooth() : X");
     }
@@ -176,11 +182,14 @@ public class RootActivity extends Activity {
         mBtManager = null;
 
         // BLE.
+        if (mBleGattIO != null) {
+            mBleGattIO.release();
+            mBleGattIO = null;
+        }
         if (mBleDeviceBinder != null) {
             mBleDeviceBinder.release();
             mBleDeviceBinder = null;
         }
-
         if (mBleDeviceScanner != null) {
             mBleDeviceScanner.release();
             mBleDeviceScanner = null;
@@ -196,7 +205,7 @@ public class RootActivity extends Activity {
             if (IS_DEBUG) Log.logDebug(TAG, "onBleDeviceScanDone()");
 
             // Check device.
-            if (bleDevice.getName().equals("TailorToys PowerUp")) {
+            if (bleDevice != null && bleDevice.getName().equals("TailorToys PowerUp")) {
                 Log.logDebug(TAG, "######## Device Name Match ########");
 
                 mTargetDevice = bleDevice;
@@ -224,34 +233,41 @@ public class RootActivity extends Activity {
             if (IS_DEBUG) Log.logDebug(TAG, "#### SERVICE = " + mTargetService.toString());
 
             // PowerUp3.0 Characteristics.
-            mTargetChara = mTargetService.getCharacteristic(
-                    UUID.fromString("86c3810e-0010-40d9-a117-26b300768cd6"));
-            if (IS_DEBUG) Log.logDebug(TAG, "#### CHARA = " + mTargetChara.toString());
+            BluetoothGattCharacteristic chara;
 
-//            BluetoothGattCharacteristic chara0020 = mTargetService.getCharacteristic(
-//                    UUID.fromString("86c3810e-0020-40d9-a117-26b300768cd6"));
-//            if (IS_DEBUG) Log.logDebug(TAG, "#### CHARA = " + chara0020.toString());
-//
-//            BluetoothGattCharacteristic chara0021 = mTargetService.getCharacteristic(
-//                    UUID.fromString("86c3810e-0021-40d9-a117-26b300768cd6"));
-//            if (IS_DEBUG) Log.logDebug(TAG, "#### CHARA = " + chara0021.toString());
-//
-//            BluetoothGattCharacteristic chara0040 = mTargetService.getCharacteristic(
-//                    UUID.fromString("86c3810e-0040-40d9-a117-26b300768cd6"));
-//            if (IS_DEBUG) Log.logDebug(TAG, "#### CHARA = " + chara0040.toString());
+            chara = mTargetService.getCharacteristic(
+                    UUID.fromString("86c3810e-0010-40d9-a117-26b300768cd6"));
+            if (IS_DEBUG) Log.logDebug(TAG, "#### CHARA = " + chara.toString());
+            mTargetCharaList.add(chara);
+
+            chara = mTargetService.getCharacteristic(
+                    UUID.fromString("86c3810e-0020-40d9-a117-26b300768cd6"));
+            if (IS_DEBUG) Log.logDebug(TAG, "#### CHARA = " + chara.toString());
+            mTargetCharaList.add(chara);
+
+            chara = mTargetService.getCharacteristic(
+                    UUID.fromString("86c3810e-0021-40d9-a117-26b300768cd6"));
+            if (IS_DEBUG) Log.logDebug(TAG, "#### CHARA = " + chara.toString());
+            mTargetCharaList.add(chara);
+
+            chara = mTargetService.getCharacteristic(
+                    UUID.fromString("86c3810e-0040-40d9-a117-26b300768cd6"));
+            if (IS_DEBUG) Log.logDebug(TAG, "#### CHARA = " + chara.toString());
+            mTargetCharaList.add(chara);
 
             // Request read.
-            boolean ret = false;
-            ret = bleGatt.readCharacteristic(mTargetChara);
-            if (IS_DEBUG) Log.logDebug(TAG, "#### RET = " + ret);
-//            ret = bleGatt.readCharacteristic(chara0020);
-//            if (IS_DEBUG) Log.logDebug(TAG, "#### RET = " + ret);
-//            ret = bleGatt.readCharacteristic(chara0021);
-//            if (IS_DEBUG) Log.logDebug(TAG, "#### RET = " + ret);
-//            ret = bleGatt.readCharacteristic(chara0040);
-//            if (IS_DEBUG) Log.logDebug(TAG, "#### RET = " + ret);
+            for (BluetoothGattCharacteristic eachChara : mTargetCharaList) {
+                mBleGattIO.requestReadChara(mTargetGatt, eachChara);
+            }
 
-
+            // PowerUp3.0 Descriptor.
+            for (BluetoothGattCharacteristic eachChara : mTargetCharaList) {
+                List<BluetoothGattDescriptor> descs = eachChara.getDescriptors();
+                mTargetDescList.addAll(descs);
+            }
+            for (BluetoothGattDescriptor eachDesc : mTargetDescList) {
+                mBleGattIO.requestReadDesc(mTargetGatt, eachDesc);
+            }
         }
 
         @Override
@@ -264,33 +280,45 @@ public class RootActivity extends Activity {
         @Override
         public void onCharaRead(BluetoothGattCharacteristic chara) {
             if (IS_DEBUG) Log.logDebug(TAG, "onCharaRead()");
-            if (IS_DEBUG) BtBleLog.logGattCharacteristic(TAG, chara);
+//            if (IS_DEBUG) BtBleLog.logGattCharacteristic(TAG, chara);
+            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
 
+            mBleGattIO.onRequestDone();
 
-
-
-            mTargetChara.setValue(10, BluetoothGattCharacteristic.FORMAT_SINT8, 0);
-            boolean ret = mTargetGatt.writeCharacteristic(mTargetChara);
-            if (IS_DEBUG) Log.logDebug(TAG, "onCharaWrite() #### ret = " + ret);
-
-
-
+//            mTargetCharaList.get(0).setValue(10, BluetoothGattCharacteristic.FORMAT_SINT8, 0);
+//            mBleGattIO.requestWriteChara(mTargetGatt, mTargetCharaList.get(0));
         }
 
         @Override
         public void onCharaWrite(BluetoothGattCharacteristic chara) {
             if (IS_DEBUG) Log.logDebug(TAG, "onCharaWrite()");
-            if (IS_DEBUG) BtBleLog.logGattCharacteristic(TAG, chara);
+//            if (IS_DEBUG) BtBleLog.logGattCharacteristic(TAG, chara);
+            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
 
-
-
-
+            mBleGattIO.onRequestDone();
         }
+
+        @Override
+        public void onDescRead(BluetoothGattDescriptor desc) {
+            if (IS_DEBUG) Log.logDebug(TAG, "onDescRead()");
+//            if (IS_DEBUG) BtBleLog.logGattDescriptor(TAG, desc);
+            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
+
+            mBleGattIO.onRequestDone();
+        }
+
+        @Override
+        public void onDescWrite(BluetoothGattDescriptor desc) {
+            if (IS_DEBUG) Log.logDebug(TAG, "onDescWrite()");
+//            if (IS_DEBUG) BtBleLog.logGattDescriptor(TAG, desc);
+            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
+
+            mBleGattIO.onRequestDone();
+        }
+
+
+
     }
-
-
-
-
 
 
 

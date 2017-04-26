@@ -249,6 +249,16 @@ public class BtBleLog {
         Log.logDebug(logtag, sb.toString());
     }
 
+    /**
+     * Log BluetoothGattDescriptor.
+     *
+     * @param logtag Log tag.
+     * @param desc BluetoothGattDescriptor
+     */
+    public static void logGattDescriptor(String logtag, BluetoothGattDescriptor desc) {
+        Log.logDebug(logtag, desc.toString());
+    }
+
     private static String getCharaPermLogStr(BluetoothGattCharacteristic chara) {
         StringBuilder sb = new StringBuilder();
 
