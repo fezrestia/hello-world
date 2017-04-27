@@ -183,9 +183,13 @@ public class BtBleLog {
                 sb.append("          PROPS = ").append(getCharaPropLogStr(chara)).append("\n");
                 sb.append("     WRITE TYPE = ").append(getCharaWriteTypeLogStr(chara)).append("\n");
 
-                String valStr = ByteUtil.byte2HexStr(chara.getValue());
+                String valStr = ByteUtil.byte2Utf8(chara.getValue());
                 if (valStr == null) valStr = "N/A";
-                sb.append("          VALUE = ").append(valStr).append("\n");
+                sb.append("     VALUE(str) = ").append(valStr).append("\n");
+
+                String valHex = ByteUtil.byte2HexStr(chara.getValue());
+                if (valHex == null) valHex = "N/A";
+                sb.append("     VALUE(hex) = ").append(valHex).append("\n");
 
                 List<BluetoothGattDescriptor> descs = chara.getDescriptors();
                 if (descs != null) {
@@ -227,9 +231,13 @@ public class BtBleLog {
         sb.append("          PROPS = ").append(getCharaPropLogStr(chara)).append("\n");
         sb.append("     WRITE TYPE = ").append(getCharaWriteTypeLogStr(chara)).append("\n");
 
-        String valStr = ByteUtil.byte2HexStr(chara.getValue());
+        String valStr = ByteUtil.byte2Utf8(chara.getValue());
         if (valStr == null) valStr = "N/A";
-        sb.append("          VALUE = ").append(valStr).append("\n");
+        sb.append("     VALUE(str) = ").append(valStr).append("\n");
+
+        String valHex = ByteUtil.byte2HexStr(chara.getValue());
+        if (valHex == null) valHex = "N/A";
+        sb.append("     VALUE(hex) = ").append(valHex).append("\n");
 
         List<BluetoothGattDescriptor> descs = chara.getDescriptors();
         if (descs != null) {
@@ -269,7 +277,7 @@ public class BtBleLog {
                 return "DEFAULT";
 
             case BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE:
-                return "NO_RESPOSE";
+                return "NO_RESPONSE";
 
             case BluetoothGattCharacteristic.WRITE_TYPE_SIGNED:
                 return "SIGNED";
@@ -390,6 +398,20 @@ public class BtBleLog {
         sb.append("    ").append(btClass.toString()).append("\n");
 
         Log.logDebug(logtag, sb.toString());
+    }
+
+    /**
+     * Log GATT I/O result.
+     *
+     * @param logtag Log tag
+     * @param status I/O result.
+     */
+    public static void logReadWriteStatus(String logtag, int status) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            Log.logDebug(logtag, "GATT I/O Result Status == GATT_SUCCESS");
+        } else {
+            Log.logDebug(logtag, "    status != GATT_SUCCESS");
+        }
     }
 
 

@@ -30,10 +30,10 @@ public class BleDeviceBinder {
     public interface BleDeviceBinderCallback {
         void onConnected(BluetoothGatt bleGatt);
         void onDisconnected();
-        void onCharaRead(BluetoothGattCharacteristic chara);
-        void onCharaWrite(BluetoothGattCharacteristic chara);
-        void onDescRead(BluetoothGattDescriptor desc);
-        void onDescWrite(BluetoothGattDescriptor desc);
+        void onCharaRead(boolean isSuccess, BluetoothGattCharacteristic chara);
+        void onCharaWrite(boolean isSuccess, BluetoothGattCharacteristic chara);
+        void onDescRead(boolean isSuccess, BluetoothGattDescriptor desc);
+        void onDescWrite(boolean isSuccess, BluetoothGattDescriptor desc);
 
 
 
@@ -84,6 +84,7 @@ public class BleDeviceBinder {
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             super.onConnectionStateChange(gatt, status, newState);
             if (IS_DEBUG) Log.logDebug(TAG, "BleGattCallback.onConnectionStateChange()");
+            if (IS_DEBUG) BtBleLog.logReadWriteStatus(TAG, status);
 
             switch (newState) {
                 case BluetoothProfile.STATE_CONNECTED:
@@ -106,9 +107,9 @@ public class BleDeviceBinder {
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
             super.onServicesDiscovered(gatt, status);
             if (IS_DEBUG) Log.logDebug(TAG, "BleGattCallback.onServicesDiscovered()");
+            if (IS_DEBUG) BtBleLog.logReadWriteStatus(TAG, status);
 
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                if (IS_DEBUG) Log.logDebug(TAG, "stats = SUCCESS");
                 if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, gatt);
 
                 // Callback.
@@ -123,15 +124,12 @@ public class BleDeviceBinder {
                 int status) {
             super.onCharacteristicRead(gatt, characteristic, status);
             if (IS_DEBUG) Log.logDebug(TAG, "BleGattCallback.onCharacteristicRead()");
-
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                if (IS_DEBUG) Log.logDebug(TAG, "    status == GATT_SUCCESS");
-            } else {
-                if (IS_DEBUG) Log.logDebug(TAG, "    status != GATT_SUCCESS");
-            }
+            if (IS_DEBUG) BtBleLog.logReadWriteStatus(TAG, status);
 
             // Callback.
-            if (mCallback != null) mCallback.onCharaRead(characteristic);
+            if (mCallback != null) {
+                mCallback.onCharaRead(status == BluetoothGatt.GATT_SUCCESS, characteristic);
+            }
         }
 
         @Override
@@ -142,14 +140,10 @@ public class BleDeviceBinder {
             super.onCharacteristicWrite(gatt, characteristic, status);
             if (IS_DEBUG) Log.logDebug(TAG, "BleGattCallback.onCharacteristicWrite()");
 
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                if (IS_DEBUG) Log.logDebug(TAG, "    status == GATT_SUCCESS");
-            } else {
-                if (IS_DEBUG) Log.logDebug(TAG, "    status != GATT_SUCCESS");
-            }
-
             // Callback.
-            if (mCallback != null) mCallback.onCharaWrite(characteristic);
+            if (mCallback != null) {
+                mCallback.onCharaWrite(status == BluetoothGatt.GATT_SUCCESS, characteristic);
+            }
         }
 
         @Override
@@ -160,14 +154,10 @@ public class BleDeviceBinder {
             super.onDescriptorRead(gatt, descriptor, status);
             if (IS_DEBUG) Log.logDebug(TAG, "BleGattCallback.onDescriptorRead()");
 
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                if (IS_DEBUG) Log.logDebug(TAG, "    status == GATT_SUCCESS");
-            } else {
-                if (IS_DEBUG) Log.logDebug(TAG, "    status != GATT_SUCCESS");
-            }
-
             // Callback.
-            if (mCallback != null) mCallback.onDescRead(descriptor);
+            if (mCallback != null) {
+                mCallback.onDescRead(status == BluetoothGatt.GATT_SUCCESS, descriptor);
+            }
         }
 
         @Override
@@ -178,14 +168,10 @@ public class BleDeviceBinder {
             super.onDescriptorWrite(gatt, descriptor, status);
             if (IS_DEBUG) Log.logDebug(TAG, "BleGattCallback.onDescriptorWrite()");
 
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                if (IS_DEBUG) Log.logDebug(TAG, "    status == GATT_SUCCESS");
-            } else {
-                if (IS_DEBUG) Log.logDebug(TAG, "    status != GATT_SUCCESS");
-            }
-
             // Callback.
-            if (mCallback != null) mCallback.onDescWrite(descriptor);
+            if (mCallback != null) {
+                mCallback.onDescWrite(status == BluetoothGatt.GATT_SUCCESS, descriptor);
+            }
         }
     }
 }

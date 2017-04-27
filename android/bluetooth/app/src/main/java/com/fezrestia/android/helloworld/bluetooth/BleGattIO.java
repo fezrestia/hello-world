@@ -10,8 +10,6 @@ import com.fezrestia.android.util.log.Log;
 
 import java.util.Deque;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Control BLE GATT Input/Output.
@@ -29,7 +27,12 @@ public class BleGattIO {
 
     private static final int RETRY_DELAY_MILLIS = 1000;
 
-    private CountDownLatch mRequestDoneWait = null; // Max 1
+    private BleGattIOCallback mCallback = null;
+
+    private final Object mCallbackLock = new Object();
+    private final Object mIdleLock = new Object();
+
+    private boolean mIsActive = true;
 
     private enum IO_TARGET {
         CHARACTERISTIC,
@@ -39,6 +42,16 @@ public class BleGattIO {
     private enum IO_TYPE {
         READ,
         WRITE,
+    }
+
+    /**
+     * Callback interface for GATT I/O.
+     */
+    public interface BleGattIOCallback {
+        void onGattCharaReadDone(BluetoothGattCharacteristic chara);
+        void onGattCharaWriteDone(BluetoothGattCharacteristic chara);
+        void onGattDescReadDone(BluetoothGattDescriptor desc);
+        void onGattDescWriteDone(BluetoothGattDescriptor desc);
     }
 
     private static class Task {
@@ -62,6 +75,11 @@ public class BleGattIO {
             this.gatt = gatt;
             this.chara = chara;
             this.desc = desc;
+        }
+
+        @Override
+        public String toString() {
+            return "TASK = " + ioTarget + " / " + ioType + " / CHARA=" + chara + " / DESC=" +desc;
         }
 
         private static Task genCharaReadTask(
@@ -93,27 +111,49 @@ public class BleGattIO {
      * CONSTRUCTOR.
      */
     public BleGattIO() {
+        if (IS_DEBUG) Log.logDebug(TAG, "CONSTRUCTOR : E");
+
+        mIsActive = true;
+
         mTaskDeque = new ConcurrentLinkedDeque<>();
         mHandlerThread = new HandlerThread("BLE-IO");
         mHandlerThread.start();
         mHandler = new Handler(mHandlerThread.getLooper());
+
+        // Start task queue polling.
+        mHandler.post(new TaskProcessor());
+
+        if (IS_DEBUG) Log.logDebug(TAG, "CONSTRUCTOR : X");
     }
 
     /**
      * Release all references.
      */
     public void release() {
-        mTaskDeque.clear();
-        mTaskDeque = null;
+        if (IS_DEBUG) Log.logDebug(TAG, "release() : E");
 
-        if (mRequestDoneWait != null) {
-            mRequestDoneWait.countDown();
-            mRequestDoneWait = null;
+        mIsActive = false;
+
+        // Stop thread.
+        mTaskDeque.clear();
+        synchronized(mCallbackLock) {
+            mCallbackLock.notify();
+        }
+        synchronized(mIdleLock) {
+            mIdleLock.notify();
+        }
+        mHandlerThread.quitSafely();
+        try {
+            mHandlerThread.join(RETRY_DELAY_MILLIS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
 
+        mTaskDeque = null;
         mHandler = null;
-        mHandlerThread.quitSafely();
         mHandlerThread = null;
+
+        if (IS_DEBUG) Log.logDebug(TAG, "release() : X");
     }
 
     /**
@@ -127,7 +167,11 @@ public class BleGattIO {
         if (IS_DEBUG) Log.logDebug(TAG, "requestReadChara() : CHARA=" + chara.getUuid());
         Task task = Task.genCharaReadTask(gatt, chara);
         mTaskDeque.addLast(task);
-        mHandler.post(new TaskProcessor());
+
+        // Polling.
+        synchronized(mIdleLock) {
+            mIdleLock.notify();
+        }
     }
 
     /**
@@ -141,7 +185,11 @@ public class BleGattIO {
         if (IS_DEBUG) Log.logDebug(TAG, "requestWriteChara() : CHARA=" + chara.getUuid());
         Task task = Task.genCharaWriteTask(gatt, chara);
         mTaskDeque.addLast(task);
-        mHandler.post(new TaskProcessor());
+
+        // Polling.
+        synchronized(mIdleLock) {
+            mIdleLock.notify();
+        }
     }
 
     /**
@@ -154,7 +202,11 @@ public class BleGattIO {
         if (IS_DEBUG) Log.logDebug(TAG, "requestReadDesc() : DESC=" + desc.getUuid());
         Task task = Task.genDescReadTask(gatt, desc);
         mTaskDeque.addLast(task);
-        mHandler.post(new TaskProcessor());
+
+        // Polling.
+        synchronized(mIdleLock) {
+            mIdleLock.notify();
+        }
     }
 
     /**
@@ -167,7 +219,11 @@ public class BleGattIO {
         if (IS_DEBUG) Log.logDebug(TAG, "requestWriteDesc() : DESC=" + desc.getUuid());
         Task task = Task.genDescWriteTask(gatt, desc);
         mTaskDeque.addLast(task);
-        mHandler.post(new TaskProcessor());
+
+        // Polling.
+        synchronized(mIdleLock) {
+            mIdleLock.notify();
+        }
     }
 
     /**
@@ -175,9 +231,8 @@ public class BleGattIO {
      */
     public void onRequestDone() {
         if (IS_DEBUG) Log.logDebug(TAG, "onRequestDone()");
-        if (mRequestDoneWait != null) {
-            if (IS_DEBUG) Log.logDebug(TAG, "onRequestDone() : Do count down");
-            mRequestDoneWait.countDown();
+        synchronized(mCallbackLock) {
+            mCallbackLock.notify();
         }
     }
 
@@ -186,16 +241,111 @@ public class BleGattIO {
         public void run() {
             if (IS_DEBUG) Log.logDebug(TAG, "TaskProcessor.run() : E");
 
-            Task task = mTaskDeque.peekFirst();
-            if (task == null) {
-                // Task deque is already empty.
-                if (IS_DEBUG) Log.logDebug(TAG, "TaskProcessor.run() : X : Already Empty");
-                return;
+            while (mIsActive) {
+                // Check queued task.
+                if (mTaskDeque.isEmpty()) {
+                    // Wait for a while.
+                    try {
+                        if (IS_DEBUG) Log.logDebug(TAG, "Wait for a while ...");
+                        synchronized (mIdleLock) {
+                            mIdleLock.wait(RETRY_DELAY_MILLIS);
+                        }
+                    } catch (InterruptedException e) {
+                        // Check next loop.
+                        continue;
+                    }
+                }
+
+                // Get top task from deque.
+                Task task = mTaskDeque.peekFirst();
+                if (task == null) {
+                    if (IS_DEBUG) Log.logDebug(TAG, "Peeked Task is null, keep idling.");
+                    continue;
+                }
+                if (IS_DEBUG) Log.logDebug(TAG, "Do Task = " + task.toString());
+
+                // Permission.
+                boolean isPermitted = checkProperty(task);
+                if (!isPermitted) {
+                    if (IS_DEBUG) Log.logDebug(TAG, "This task is not permitted. Skip this.");
+
+                    // Skip this task.
+                    mTaskDeque.removeFirst();
+                    continue;
+                }
+
+                // Do request I/O to GATT.
+                boolean isSuccess = doRequest(task);
+
+                // Check request success/fail.
+                if (isSuccess) {
+                    try {
+                        synchronized(mCallbackLock) {
+                            mCallbackLock.wait();
+                        }
+
+                        // Counted down. Result is successfully returned. Remove task from deque.
+                        mTaskDeque.removeFirst();
+
+                    } catch (InterruptedException e) {
+                        if (IS_DEBUG) Log.logError(TAG, "Timeout to request read. ReTry.");
+                        continue;
+                    }
+                } else {
+                    if (IS_DEBUG) Log.logError(TAG, "Failed to request read. ReTry.");
+
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        // NOP.
+                    }
+                    continue;
+                }
+
+                // Task done successfully.
+
+                // Callback.
+                if (mCallback != null) doCallback(task);
+            } // while
+
+            if (IS_DEBUG) Log.logDebug(TAG, "TaskProcessor.run() : X");
+        }
+
+        private boolean checkProperty(Task task) {
+            boolean isOk = false;
+
+            switch (task.ioTarget) {
+                case CHARACTERISTIC:
+                    switch (task.ioType) {
+                        case READ:
+                            isOk = (task.chara.getProperties()
+                                    & BluetoothGattCharacteristic.PROPERTY_READ) != 0;
+                            break;
+
+                        case WRITE:
+                            isOk = (task.chara.getProperties()
+                                    & BluetoothGattCharacteristic.PROPERTY_WRITE) != 0;
+                            break;
+
+                        default:
+                            throw new IllegalArgumentException("Unexpected IO_TYPE");
+                    }
+                    break;
+
+                case DESCRIPTOR:
+                    isOk = true;
+                    break;
+
+                default:
+                    throw new IllegalArgumentException("Unexpected IO_TARGET");
             }
 
-            mRequestDoneWait = new CountDownLatch(1);
+            return isOk;
+        }
 
+        private boolean doRequest(Task task) {
             boolean isSuccess = false;
+
             switch (task.ioTarget) {
                 case CHARACTERISTIC:
                     switch (task.ioType) {
@@ -226,28 +376,49 @@ public class BleGattIO {
                             throw new IllegalArgumentException("Unexpected IO_TYPE");
                     }
                     break;
+
+                default:
+                    throw new IllegalArgumentException("Unexpected IO_TARGET");
             }
 
-            if (isSuccess) {
-                // Task is handled successfully. Remove it from deque.
-                mTaskDeque.removeFirst();
+            return isSuccess;
+        }
 
-                try {
-                    mRequestDoneWait.await(5000, TimeUnit.MILLISECONDS);
-                } catch (InterruptedException e) {
-                    if (IS_DEBUG) Log.logError(TAG, "Timeouted to request read. ReTry.");
+        private void doCallback(Task task) {
+            switch (task.ioTarget) {
+                case CHARACTERISTIC:
+                    switch (task.ioType) {
+                        case READ:
+                            mCallback.onGattCharaReadDone(task.chara);
+                            break;
 
-                    if (mHandler != null) mHandler.postDelayed(this, RETRY_DELAY_MILLIS);
-                }
-            } else {
-                if (IS_DEBUG) Log.logError(TAG, "Failed to request read. ReTry.");
+                        case WRITE:
+                            mCallback.onGattCharaWriteDone(task.chara);
+                            break;
 
-                mRequestDoneWait = null;
+                        default:
+                            throw new IllegalArgumentException("Unexpected IO_TYPE");
+                    }
+                    break;
 
-                if (mHandler != null) mHandler.postDelayed(this, RETRY_DELAY_MILLIS);
+                case DESCRIPTOR:
+                    switch (task.ioType) {
+                        case READ:
+                            mCallback.onGattDescReadDone(task.desc);
+                            break;
+
+                        case WRITE:
+                            mCallback.onGattDescWriteDone(task.desc);
+                            break;
+
+                        default:
+                            throw new IllegalArgumentException("Unexpected IO_TYPE");
+                    }
+                    break;
+
+                default:
+                    throw new IllegalArgumentException("Unexpected IO_TARGET");
             }
-
-            if (IS_DEBUG) Log.logDebug(TAG, "TaskProcessor.run() : X");
         }
     }
 }

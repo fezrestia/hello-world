@@ -231,6 +231,29 @@ public class RootActivity extends Activity {
 
             mTargetGatt = bleGatt;
 
+            List<BluetoothGattService> services = mTargetGatt.getServices();
+            List<BluetoothGattCharacteristic> charas = new ArrayList<>();
+            List<BluetoothGattDescriptor> descs = new ArrayList<>();
+
+            // All elements.
+            for (BluetoothGattService service : services) {
+                if (service.getCharacteristics() != null) {
+                    charas.addAll(service.getCharacteristics());
+                }
+            }
+            for (BluetoothGattCharacteristic chara : charas) {
+                if (chara.getDescriptors() != null) {
+                    descs.addAll(chara.getDescriptors());
+                }
+            }
+            // Request read.
+            for (BluetoothGattCharacteristic chara : charas) {
+                mBleGattIO.requestReadChara(mTargetGatt, chara);
+            }
+            for (BluetoothGattDescriptor desc : descs) {
+                mBleGattIO.requestReadDesc(mTargetGatt, desc);
+            }
+
             // PowerUp3.0 Service.
             mTargetService = bleGatt.getService(
                     UUID.fromString("86c3810e-f171-40d9-a117-26b300768cd6"));
@@ -258,20 +281,6 @@ public class RootActivity extends Activity {
                     UUID.fromString("86c3810e-0040-40d9-a117-26b300768cd6"));
             if (IS_DEBUG) Log.logDebug(TAG, "#### CHARA = " + chara.toString());
             mTargetCharaList.add(chara);
-
-            // Request read.
-            for (BluetoothGattCharacteristic eachChara : mTargetCharaList) {
-                mBleGattIO.requestReadChara(mTargetGatt, eachChara);
-            }
-
-            // PowerUp3.0 Descriptor.
-            for (BluetoothGattCharacteristic eachChara : mTargetCharaList) {
-                List<BluetoothGattDescriptor> descs = eachChara.getDescriptors();
-                mTargetDescList.addAll(descs);
-            }
-            for (BluetoothGattDescriptor eachDesc : mTargetDescList) {
-                mBleGattIO.requestReadDesc(mTargetGatt, eachDesc);
-            }
         }
 
         @Override
@@ -282,37 +291,41 @@ public class RootActivity extends Activity {
         }
 
         @Override
-        public void onCharaRead(BluetoothGattCharacteristic chara) {
+        public void onCharaRead(boolean isSuccess, BluetoothGattCharacteristic chara) {
             if (IS_DEBUG) Log.logDebug(TAG, "onCharaRead()");
+            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
 //            if (IS_DEBUG) BtBleLog.logGattCharacteristic(TAG, chara);
-            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
+//            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
 
             mBleGattIO.onRequestDone();
         }
 
         @Override
-        public void onCharaWrite(BluetoothGattCharacteristic chara) {
+        public void onCharaWrite(boolean isSuccess, BluetoothGattCharacteristic chara) {
             if (IS_DEBUG) Log.logDebug(TAG, "onCharaWrite()");
+            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
 //            if (IS_DEBUG) BtBleLog.logGattCharacteristic(TAG, chara);
-            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
+//            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
 
             mBleGattIO.onRequestDone();
         }
 
         @Override
-        public void onDescRead(BluetoothGattDescriptor desc) {
+        public void onDescRead(boolean isSuccess, BluetoothGattDescriptor desc) {
             if (IS_DEBUG) Log.logDebug(TAG, "onDescRead()");
+            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
 //            if (IS_DEBUG) BtBleLog.logGattDescriptor(TAG, desc);
-            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
+//            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
 
             mBleGattIO.onRequestDone();
         }
 
         @Override
-        public void onDescWrite(BluetoothGattDescriptor desc) {
+        public void onDescWrite(boolean isSuccess, BluetoothGattDescriptor desc) {
             if (IS_DEBUG) Log.logDebug(TAG, "onDescWrite()");
+            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
 //            if (IS_DEBUG) BtBleLog.logGattDescriptor(TAG, desc);
-            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
+//            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
 
             mBleGattIO.onRequestDone();
         }
@@ -378,6 +391,10 @@ public class RootActivity extends Activity {
     private class EngineUpdateTask implements Runnable {
         @Override
         public void run() {
+
+            if (mTargetCharaList.isEmpty()) {
+                return;
+            }
 
             BluetoothGattCharacteristic chara = mTargetCharaList.get(0);
 
