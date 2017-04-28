@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.view.View;
 import android.widget.Button;
+import android.widget.SeekBar;
 
 import com.fezrestia.android.util.log.Log;
 
@@ -42,6 +43,9 @@ public class RootActivity extends Activity {
         keyBleSetUp.setOnClickListener(new KeyBleSetUpOnClickListener());
         Button keyBleDrive0 = (Button) findViewById(R.id.ble_drive_0);
         keyBleDrive0.setOnClickListener(new KeyBleDrive0OnClickListener());
+
+        SeekBar sliderEngine = (SeekBar) findViewById(R.id.engine);
+        sliderEngine.setOnSeekBarChangeListener(new EngineSliderListener());
 
         if (IS_DEBUG) Log.logDebug(TAG, "onCreate() : X");
     }
@@ -209,7 +213,7 @@ public class RootActivity extends Activity {
             if (IS_DEBUG) Log.logDebug(TAG, "onBleDeviceScanDone()");
 
             // Check device.
-            if (bleDevice != null && bleDevice.getName().equals("TailorToys PowerUp")) {
+            if (bleDevice.getName() != null && bleDevice.getName().equals("TailorToys PowerUp")) {
                 Log.logDebug(TAG, "######## Device Name Match ########");
 
                 mTargetDevice = bleDevice;
@@ -293,9 +297,9 @@ public class RootActivity extends Activity {
         @Override
         public void onCharaRead(boolean isSuccess, BluetoothGattCharacteristic chara) {
             if (IS_DEBUG) Log.logDebug(TAG, "onCharaRead()");
-            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
-//            if (IS_DEBUG) BtBleLog.logGattCharacteristic(TAG, chara);
+//            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
 //            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
+            if (IS_DEBUG) BtBleLog.logGattCharacteristic(TAG, chara);
 
             mBleGattIO.onRequestDone();
         }
@@ -303,9 +307,9 @@ public class RootActivity extends Activity {
         @Override
         public void onCharaWrite(boolean isSuccess, BluetoothGattCharacteristic chara) {
             if (IS_DEBUG) Log.logDebug(TAG, "onCharaWrite()");
-            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
-//            if (IS_DEBUG) BtBleLog.logGattCharacteristic(TAG, chara);
+//            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
 //            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
+            if (IS_DEBUG) BtBleLog.logGattCharacteristic(TAG, chara);
 
             mBleGattIO.onRequestDone();
         }
@@ -313,9 +317,9 @@ public class RootActivity extends Activity {
         @Override
         public void onDescRead(boolean isSuccess, BluetoothGattDescriptor desc) {
             if (IS_DEBUG) Log.logDebug(TAG, "onDescRead()");
-            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
-//            if (IS_DEBUG) BtBleLog.logGattDescriptor(TAG, desc);
+//            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
 //            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
+            if (IS_DEBUG) BtBleLog.logGattDescriptor(TAG, desc);
 
             mBleGattIO.onRequestDone();
         }
@@ -323,9 +327,9 @@ public class RootActivity extends Activity {
         @Override
         public void onDescWrite(boolean isSuccess, BluetoothGattDescriptor desc) {
             if (IS_DEBUG) Log.logDebug(TAG, "onDescWrite()");
-            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
-//            if (IS_DEBUG) BtBleLog.logGattDescriptor(TAG, desc);
+//            if (IS_DEBUG) BtBleLog.logAllGattServices(TAG, mTargetGatt);
 //            if (IS_DEBUG) BtBleLog.logGattService(TAG, mTargetService);
+            if (IS_DEBUG) BtBleLog.logGattDescriptor(TAG, desc);
 
             mBleGattIO.onRequestDone();
         }
@@ -413,6 +417,32 @@ public class RootActivity extends Activity {
             if (mValue != 0) {
                 mHandler.postDelayed(this, 1000);
             }
+        }
+    }
+
+    private class EngineSliderListener implements SeekBar.OnSeekBarChangeListener {
+        @Override
+        public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+            if (IS_DEBUG) Log.logDebug(TAG,
+                    "EngineSliderListener.onProgressChanged() : VAL = " + progress);
+
+            if (mTargetCharaList.isEmpty()) {
+                return;
+            }
+
+            BluetoothGattCharacteristic chara = mTargetCharaList.get(0);
+            chara.setValue(progress, BluetoothGattCharacteristic.FORMAT_SINT8, 0);
+            mBleGattIO.requestWriteChara(mTargetGatt, chara);
+        }
+
+        @Override
+        public void onStartTrackingTouch(SeekBar seekBar) {
+            // Touch down on slider.
+        }
+
+        @Override
+        public void onStopTrackingTouch(SeekBar seekBar) {
+            // Touch up from slider.
         }
     }
 
