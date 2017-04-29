@@ -34,13 +34,26 @@
         android:textSize="24sp"
         android:text="Engine Throttle"
     />
-
     <SeekBar
         android:id="@+id/engine"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:progress="0"
         android:max="254"
+    />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="24sp"
+        android:text="Rudder Angle"
+    />
+    <SeekBar
+        android:id="@+id/rudder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:progress="128"
+        android:max="255"
     />
 
 </LinearLayout>

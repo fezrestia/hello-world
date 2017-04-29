@@ -47,6 +47,9 @@ public class RootActivity extends Activity {
         SeekBar sliderEngine = (SeekBar) findViewById(R.id.engine);
         sliderEngine.setOnSeekBarChangeListener(new EngineSliderListener());
 
+        SeekBar sliderRudder = (SeekBar) findViewById(R.id.rudder);
+        sliderRudder.setOnSeekBarChangeListener(new RudderSliderListener());
+
         if (IS_DEBUG) Log.logDebug(TAG, "onCreate() : X");
     }
 
@@ -426,11 +429,39 @@ public class RootActivity extends Activity {
             if (IS_DEBUG) Log.logDebug(TAG,
                     "EngineSliderListener.onProgressChanged() : VAL = " + progress);
 
-            if (mTargetCharaList.isEmpty()) {
+            if (mTargetCharaList == null || mTargetCharaList.isEmpty()) {
                 return;
             }
 
             BluetoothGattCharacteristic chara = mTargetCharaList.get(0);
+            chara.setValue(progress, BluetoothGattCharacteristic.FORMAT_SINT8, 0);
+            mBleGattIO.requestWriteChara(mTargetGatt, chara);
+        }
+
+        @Override
+        public void onStartTrackingTouch(SeekBar seekBar) {
+            // Touch down on slider.
+        }
+
+        @Override
+        public void onStopTrackingTouch(SeekBar seekBar) {
+            // Touch up from slider.
+        }
+    }
+
+    private class RudderSliderListener implements SeekBar.OnSeekBarChangeListener {
+        @Override
+        public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+            if (IS_DEBUG) Log.logDebug(TAG,
+                    "RudderSliderListener.onProgressChanged() : VAL = " + progress);
+
+            if (mTargetCharaList == null || mTargetCharaList.isEmpty()) {
+                return;
+            }
+
+            progress = progress - 128; // 0 = center
+
+            BluetoothGattCharacteristic chara = mTargetCharaList.get(2);
             chara.setValue(progress, BluetoothGattCharacteristic.FORMAT_SINT8, 0);
             mBleGattIO.requestWriteChara(mTargetGatt, chara);
         }

@@ -32,7 +32,33 @@ public class BleGattIO {
     private final Object mCallbackLock = new Object();
     private final Object mIdleLock = new Object();
 
-    private boolean mIsActive = true;
+    // Status flag will be updated only once in release().
+    private volatile boolean mIsActive = true;
+
+    private ThreadSafeCounter mRequestCounter = null;
+
+    // Request counter.
+    private static class ThreadSafeCounter {
+        private volatile int mCount;
+
+        /**
+         * Get current count.
+         *
+         * @return Current count.
+         */
+        public int get() {
+            return mCount;
+        }
+
+        /**
+         * Increment count.
+         *
+         * @return Incremented count.
+         */
+        public synchronized int increment() {
+            return ++mCount;
+        }
+    }
 
     private enum IO_TARGET {
         CHARACTERISTIC,
@@ -113,8 +139,6 @@ public class BleGattIO {
     public BleGattIO() {
         if (IS_DEBUG) Log.logDebug(TAG, "CONSTRUCTOR : E");
 
-        mIsActive = true;
-
         mTaskDeque = new ConcurrentLinkedDeque<>();
         mHandlerThread = new HandlerThread("BLE-IO");
         mHandlerThread.start();
@@ -122,6 +146,8 @@ public class BleGattIO {
 
         // Start task queue polling.
         mHandler.post(new TaskProcessor());
+
+        mRequestCounter = new ThreadSafeCounter();
 
         if (IS_DEBUG) Log.logDebug(TAG, "CONSTRUCTOR : X");
     }
@@ -132,10 +158,9 @@ public class BleGattIO {
     public void release() {
         if (IS_DEBUG) Log.logDebug(TAG, "release() : E");
 
-        mIsActive = false;
+        mIsActive = false; // Updated only once.
 
         // Stop thread.
-        mTaskDeque.clear();
         synchronized(mCallbackLock) {
             mCallbackLock.notify();
         }
@@ -149,9 +174,11 @@ public class BleGattIO {
             e.printStackTrace();
         }
 
+        mTaskDeque.clear();
         mTaskDeque = null;
         mHandler = null;
         mHandlerThread = null;
+        mRequestCounter = null;
 
         if (IS_DEBUG) Log.logDebug(TAG, "release() : X");
     }
@@ -166,14 +193,7 @@ public class BleGattIO {
     public void requestReadChara(BluetoothGatt gatt, BluetoothGattCharacteristic chara) {
         if (IS_DEBUG) Log.logDebug(TAG, "requestReadChara() : CHARA=" + chara.getUuid());
         Task task = Task.genCharaReadTask(gatt, chara);
-        mTaskDeque.addLast(task);
-
-        // Polling.
-        if (IS_DEBUG) Log.logDebug(TAG, "Notify to Idling : E");
-        synchronized(mIdleLock) {
-            mIdleLock.notify();
-        }
-        if (IS_DEBUG) Log.logDebug(TAG, "Notify to Idling : X");
+        request(task);
     }
 
     /**
@@ -186,14 +206,7 @@ public class BleGattIO {
     public void requestWriteChara(BluetoothGatt gatt, BluetoothGattCharacteristic chara) {
         if (IS_DEBUG) Log.logDebug(TAG, "requestWriteChara() : CHARA=" + chara.getUuid());
         Task task = Task.genCharaWriteTask(gatt, chara);
-        mTaskDeque.addLast(task);
-
-        // Polling.
-        if (IS_DEBUG) Log.logDebug(TAG, "Notify to Idling : E");
-        synchronized(mIdleLock) {
-            mIdleLock.notify();
-        }
-        if (IS_DEBUG) Log.logDebug(TAG, "Notify to Idling : X");
+        request(task);
     }
 
     /**
@@ -205,14 +218,7 @@ public class BleGattIO {
     public void requestReadDesc(BluetoothGatt gatt, BluetoothGattDescriptor desc) {
         if (IS_DEBUG) Log.logDebug(TAG, "requestReadDesc() : DESC=" + desc.getUuid());
         Task task = Task.genDescReadTask(gatt, desc);
-        mTaskDeque.addLast(task);
-
-        // Polling.
-        if (IS_DEBUG) Log.logDebug(TAG, "Notify to Idling : E");
-        synchronized(mIdleLock) {
-            mIdleLock.notify();
-        }
-        if (IS_DEBUG) Log.logDebug(TAG, "Notify to Idling : X");
+        request(task);
     }
 
     /**
@@ -224,47 +230,54 @@ public class BleGattIO {
     public void requestWriteDesc(BluetoothGatt gatt, BluetoothGattDescriptor desc) {
         if (IS_DEBUG) Log.logDebug(TAG, "requestWriteDesc() : DESC=" + desc.getUuid());
         Task task = Task.genDescWriteTask(gatt, desc);
-        mTaskDeque.addLast(task);
+        request(task);
+    }
 
-        // Polling.
-        if (IS_DEBUG) Log.logDebug(TAG, "Notify to Idling : E");
+    private void request(Task task) {
+        if (IS_DEBUG) Log.logDebug(TAG, "request() Notify to Idling : E");
         synchronized(mIdleLock) {
+            mTaskDeque.addLast(task);
             mIdleLock.notify();
         }
-        if (IS_DEBUG) Log.logDebug(TAG, "Notify to Idling : X");
+
+        mRequestCounter.increment();
+
+        if (IS_DEBUG) Log.logDebug(TAG, "request() Notify to Idling : X");
     }
 
     /**
      * Notify Read/Write request is completed to BleGattIO instance.
      */
     public void onRequestDone() {
-        if (IS_DEBUG) Log.logDebug(TAG, "onRequestDone() : E");
+        if (IS_DEBUG) Log.logDebug(TAG, "onRequestDone() Notify to Callback : E");
         synchronized(mCallbackLock) {
             mCallbackLock.notify();
         }
-        if (IS_DEBUG) Log.logDebug(TAG, "onRequestDone() : X");
+        if (IS_DEBUG) Log.logDebug(TAG, "onRequestDone() Notify to Callback : X");
     }
 
     private class TaskProcessor implements Runnable {
+        private int mDoneCount = 0;
+
         @Override
         public void run() {
             if (IS_DEBUG) Log.logDebug(TAG, "TaskProcessor.run() : E");
 
             while (mIsActive) {
                 // Check queued task.
-                if (mTaskDeque.isEmpty()) {
-                    // Wait for a while.
-                    try {
-                        if (IS_DEBUG) Log.logDebug(TAG, "Idling wait for a while ...");
-                        synchronized (mIdleLock) {
+                if (IS_DEBUG) Log.logDebug(TAG, "Idling wait for a while ...");
+                synchronized (mIdleLock) {
+                    if (mTaskDeque.isEmpty()) {
+                        // Wait for a while.
+                        try {
                             mIdleLock.wait(RETRY_DELAY_MILLIS);
+                        } catch (InterruptedException e) {
+                            // Check next loop.
+                            continue;
                         }
-                        if (IS_DEBUG) Log.logDebug(TAG, "Idling is DONE");
-                    } catch (InterruptedException e) {
-                        // Check next loop.
-                        continue;
                     }
                 }
+                if (IS_DEBUG) Log.logDebug(TAG, "Idling is DONE");
 
                 // Get top task from deque.
                 Task task = mTaskDeque.peekFirst();
@@ -287,7 +300,7 @@ public class BleGattIO {
                 if (IS_DEBUG) Log.logError(TAG, "Callback waiting ...");
                 synchronized(mCallbackLock) {
                     // Do request I/O to GATT.
-                    boolean isSuccess = doRequest(task);
+                    boolean isSuccess = doRequest(task); // Start waiting for callback if success.
                     // Check request success/fail.
                     if (isSuccess) {
                         try {
@@ -308,6 +321,9 @@ public class BleGattIO {
                 if (IS_DEBUG) Log.logError(TAG, "Callback waiting DONE.");
 
                 // Task done successfully.
+                ++mDoneCount;
+                if (IS_DEBUG) Log.logError(TAG,
+                        "Done/Request = " + mDoneCount + "/" + mRequestCounter.get());
 
                 // Callback.
                 if (mCallback != null) doCallback(task);
