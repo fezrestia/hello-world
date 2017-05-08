@@ -417,6 +417,8 @@ public class RootActivity extends Activity {
             chara.setValue(mValue, BluetoothGattCharacteristic.FORMAT_SINT8, 0);
             mBleGattIO.requestWriteChara(mTargetGatt, chara);
 
+            mBleGattIO.requestReadChara(mTargetGatt, chara);
+
             if (mValue != 0) {
                 mHandler.postDelayed(this, 1000);
             }
