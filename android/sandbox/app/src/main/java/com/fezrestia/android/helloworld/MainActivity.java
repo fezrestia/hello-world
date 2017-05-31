@@ -2,48 +2,49 @@ package com.fezrestia.android.helloworld;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.util.Log;
+
+import com.fezrestia.android.util.log.Log;
 
 public class MainActivity extends Activity {
-    public static final String TAG = "TraceLog";
+    public static final String TAG = "MainActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.e(TAG, "onCreate() : E");
+        Log.logError(TAG, "onCreate() : E");
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_main);
 
-        Log.e(TAG, "onCreate() : X");
+        Log.logError(TAG, "onCreate() : X");
     }
 
     @Override
     public void onResume() {
-        Log.e(TAG, "onResume() : E");
+        Log.logError(TAG, "onResume() : E");
         super.onResume();
 
 //        ClockDebug.check();
 
-        Log.e(TAG, "onResume() : X");
+        Log.logError(TAG, "onResume() : X");
     }
 
     @Override
     public void onPause() {
-        Log.e(TAG, "onPause() : E");
+        Log.logError(TAG, "onPause() : E");
 
         // NOP.
 
         super.onPause();
-        Log.e(TAG, "onPause() : X");
+        Log.logError(TAG, "onPause() : X");
     }
 
     @Override
     public void onDestroy() {
-        Log.e(TAG, "onDestroy() : E");
+        Log.logError(TAG, "onDestroy() : E");
 
         // NOP.
 
         super.onDestroy();
-        Log.e(TAG, "onDestroy() : X");
+        Log.logError(TAG, "onDestroy() : X");
     }
 }

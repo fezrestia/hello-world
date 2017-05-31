@@ -18,6 +18,14 @@
             </intent-filter>
         </activity>
 
+        <receiver
+                android:name=".ThreadHandlerDebug"
+        >
+            <intent-filter>
+                <action android:name="sandbox.debug.intent" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>
