@@ -1,0 +1,22 @@
+NEW sample
+
+<%= form_tag create_sample_path, method: 'post' do %>
+
+  <p>
+
+    <%= label_tag :key1, "key1: Pull Down Menu" %>
+    <%= collection_select :data, :key1, Model.all, :id, :name, include_blank: true %>
+
+    <br>
+
+    <%= label_tag :key2, "key2: Free Text" %>
+    <%= text_field :data, :key2 %>
+
+  </p>
+
+  <p>
+    <%= submit_tag 'Do' %>
+  </p>
+
+<% end %>
+
