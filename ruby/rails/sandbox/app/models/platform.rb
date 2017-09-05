@@ -1,6 +1,6 @@
 class Platform < ApplicationRecord
 
-  has_many :platformmodelrels
-  has_many :models, through: :platformmodelrels
+  has_many :platform_model_rels
+  has_many :models, through: :platform_model_rels
 
 end
