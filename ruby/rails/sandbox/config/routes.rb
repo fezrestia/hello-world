@@ -6,4 +6,7 @@ Rails.application.routes.draw do
   get   '/sample/new',    to: 'sample#new',     as: 'new_sample'
   post  '/sample',        to: 'sample#create',  as: 'create_sample'
 
+  get   '/query',         to: 'sample#query',   as: 'query'
+
+
 end
