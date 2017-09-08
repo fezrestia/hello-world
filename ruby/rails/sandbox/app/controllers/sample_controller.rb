@@ -138,8 +138,42 @@ class SampleController < ApplicationController
 
     ret << "\n"
 
+    log = '## Color->Model->Platform ALL SELECT'
+    ret << log << "\n"
+    logger.debug(log)
+    Color.joins("LEFT OUTER JOIN model_color_rels ON colors.id = model_color_rels.color_id")
+        .joins("LEFT OUTER JOIN models ON model_color_rels.model_id = models.id")
+        .joins("LEFT OUTER JOIN platform_model_rels ON models.id = platform_model_rels.model_id")
+        .joins("LEFT OUTER JOIN platforms ON platform_model_rels.platform_id = platforms.id")
+        .select("colors.*, model_color_rels.*, models.*, platform_model_rels.*, platforms.*, colors.id AS color_id, colors.name AS color_name, models.id AS model_id, models.name AS model_name, platforms.id AS platform_id, platforms.name AS platform_name")
+        .each { |record|
+      attrs = record.attributes
+      attrs.delete('created_at')
+      attrs.delete('updated_at')
+      ret << "    " << attrs.to_s << "\n"
+    }
 
+    ret << "\n"
 
+    log = '## Color->Model->Platform ALL SELECT'
+    ret << log << "\n"
+    logger.debug(log)
+    Color.joins("LEFT OUTER JOIN model_color_rels ON colors.id = model_color_rels.color_id")
+        .joins("LEFT OUTER JOIN models ON model_color_rels.model_id = models.id")
+        .joins("LEFT OUTER JOIN platform_model_rels ON models.id = platform_model_rels.model_id")
+        .joins("LEFT OUTER JOIN platforms ON platform_model_rels.platform_id = platforms.id")
+        .select("colors.*, model_color_rels.*, models.*, platform_model_rels.*, platforms.*, colors.id AS color_id, colors.name AS color_name, models.id AS model_id, models.name AS model_name, platforms.id AS platform_id, platforms.name AS platform_name")
+        .where("model_name = ? OR model_name IS NULL", "Rachael")
+        .each { |record|
+logger.debug("########")
+logger.debug("record = #{record.to_s}")
+logger.debug("record.variables = #{record.instance_variables}")
+      attrs = record.attributes
+logger.debug("attrs = #{attrs}")
+      attrs.delete('created_at')
+      attrs.delete('updated_at')
+      ret << "    " << attrs.to_s << "\n"
+    }
 
 
 
