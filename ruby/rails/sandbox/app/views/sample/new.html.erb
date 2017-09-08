@@ -10,7 +10,27 @@ NEW sample
     <br>
 
     <%= label_tag :key2, "key2: Free Text" %>
-    <%= text_field :data, :key2 %>
+
+    <% tf = text_field :data, :key2, value: "ENTER_TEXT" %>
+    <%= tf %>
+
+    <br>
+    <% vals = tf.split(' ') %>
+    <% value = 'default' %>
+    <% vals.each { |val| %>
+      <% if val.start_with?('value=') %>
+        <% value = val.dup %>
+        <% value.slice!('value=') %>
+        <% break %>
+      <% end %>
+    <% } %>
+
+
+
+    <%= "key2 = #{tf}" %>
+    <br>
+    <%= "key2.value = #{value}" %>
+
 
   </p>
 
