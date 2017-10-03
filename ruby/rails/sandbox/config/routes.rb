@@ -3,10 +3,11 @@ Rails.application.routes.draw do
 
   root 'sample#index'
 
-  get   '/sample/new',    to: 'sample#new',     as: 'new_sample'
-  post  '/sample',        to: 'sample#create',  as: 'create_sample'
+  get   '/sample/new',    to: 'sample#new',           as: 'new_sample'
+  post  '/sample',        to: 'sample#create',        as: 'create_sample'
 
-  get   '/query',         to: 'sample#query',   as: 'query'
+  get   '/query',         to: 'sample#query',         as: 'query'
+  get   '/test_param',    to: 'sample#test_param',    as: 'test_param'
 
 
 end

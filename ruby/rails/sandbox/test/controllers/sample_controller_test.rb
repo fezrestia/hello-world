@@ -1,11 +1,24 @@
 require 'test_helper'
 
-class SampleControllerTest < ActionDispatch::IntegrationTest
+#class SampleControllerTest < ActionDispatch::IntegrationTest
+class SampleControllerTest < ActionController::TestCase
   # test "the truth" do
   #   assert true
   # end
 
+  def setup
+    super
+  end
 
+  test "test_param" do
+    get :test_param
+
+    assert_equal 200, response.status
+
+    assert_equal "result_0", @query_result[0]
+    assert_equal "result_1", @query_result[1]
+    assert_equal "result_2", @query_result[2]
+  end
 
   # Sample HTML test
   test "test html" do

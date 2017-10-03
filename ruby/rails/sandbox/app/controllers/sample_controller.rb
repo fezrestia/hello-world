@@ -1,5 +1,7 @@
 class SampleController < ApplicationController
 
+  attr_reader :query_result
+
   def index
     # NOP
   end
@@ -9,7 +11,21 @@ class SampleController < ApplicationController
   end
 
   def create
-    render plain: "PARAS: key1=#{params[:data][:key1]}, key2=#{params[:data][:key2]}"
+    key1 = params[:data][:key1]
+    key2 = params[:data][:key2]
+    key1 = "null" if key1.nil?
+    key2 = "null" if key2.nil?
+
+    render plain: "PARAS: key1=#{key1}, key2=#{key2}"
+  end
+
+  def test_param
+    @query_result = []
+    @query_result.push("result_0")
+    @query_result.push("result_1")
+    @query_result.push("result_2")
+
+    render plain: "DONE"
   end
 
   def query
