@@ -225,4 +225,56 @@ logger.debug"## record.models[0] = #{record.models[0]}, len=#{record.models.size
     render plain: ret
   end
 
+  def d3sample
+    @title = "d3"
+
+
+
+
+
+  end
+
+  def d3sample_data
+
+    @data = [
+      {
+        :label  => "aaa",
+        :score => 100,
+      },
+      {
+        :label  => "bbb",
+        :score => 200,
+      },
+      {
+        :label  => "ccc",
+        :score => 400,
+      },
+      {
+        :label  => "ddd",
+        :score => 300,
+      },
+    ]
+
+    render json: @data
+  end
+
+  def d3_data_dependency_wheel
+
+    @data = {
+      packageNames: ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"],
+      matrix: [
+          [0, 1, 1, 1, 1, 1], #A
+          [1, 0, 1, 1, 1, 1], #B
+          [1, 1, 0, 1, 1, 1], #C
+          [1, 1, 1, 0, 1, 1], #D
+          [1, 1, 1, 1, 0, 1], #E
+          [1, 1, 1, 1, 1, 0], #F
+      ],
+    }
+
+    render json: @data
+  end
+
+
+
 end

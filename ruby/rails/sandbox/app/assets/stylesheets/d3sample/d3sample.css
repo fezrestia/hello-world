@@ -1,0 +1,30 @@
+.axis path,
+.axis line {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+}
+
+.bar {
+    fill: orange;
+}
+
+.bar:hover {
+    fill: orangered;
+}
+
+.x.axis path {
+    display: none;
+}
+
+.container_main {
+    margin-top: 50px;
+}
+
+.bar {
+    display: inline-block;
+    width: 20px;
+    background-color: teal;
+    margin-right: 2px;
+}
+
