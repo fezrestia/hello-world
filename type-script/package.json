@@ -9,14 +9,14 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/jquery": "^3.3.1",
-    "browser-sync": "^2.23.7",
-    "del": "^3.0.0",
-    "gulp": "^3.9.1",
-    "gulp-typescript": "^4.0.2",
-    "typescript": "^2.8.3"
+    "@types/jquery": ">=3.3.2",
+    "browser-sync": ">=2.24.4",
+    "del": ">=3.0.0",
+    "gulp": ">=4.0.0",
+    "gulp-typescript": ">=4.0.2",
+    "typescript": ">=2.8.3"
   },
   "dependencies": {
-    "bower": "^1.8.4"
+    "bower": ">=1.8.4",
   }
 }
