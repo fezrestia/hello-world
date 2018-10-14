@@ -4,18 +4,26 @@
 
 #define MESSAGE "HELLO WORLD !"
 
+void on_error(char* msg, int socket_fd) {
+    if (socket_fd != -1) {
+        close(socket_fd);
+    }
+    printf("TraceLog: client: %s\n", msg);
+}
+
 int main(void) {
     printf("TraceLog: client: main() : E\n");
 
-    int result = 0;
+    int err = 0;
+    int socket_fd = -1;
 
     // Create client socket.
-    int socketfd = socket(
+    socket_fd = socket(
             AF_UNIX, // Local connection.
             SOCK_STREAM, // Bi-directional access, bite stream.
             0); // Default protocol.
-    if (socketfd == -1) {
-        printf("TraceLog: client: socketfd != 0\n");
+    if (socket_fd == -1) {
+        on_error("socket_fd != 0", socket_fd);
         return -1;
     }
 
@@ -25,29 +33,27 @@ int main(void) {
     strcpy(addr.sun_path, "socket_file"); // Common socket file.
 
     // Connect.
-    result = connect(
-            socketfd, // Bind target socket.
+    err = connect(
+            socket_fd, // Bind target socket.
             (struct sockaddr*) &addr, // Socket address.
             sizeof(struct sockaddr_un)); // Address size.
-    if (result != 0) {
-        printf("TraceLog: client: connect failed.\n");
-        close(socketfd);
+    if (err != 0) {
+        on_error("connect failed.", socket_fd);
         return -1;
     }
 
     // Send message.
-    result = write(
-            socketfd, // Target socket.
+    err = write(
+            socket_fd, // Target socket.
             MESSAGE, // Message.
             strlen(MESSAGE)); // Message size.
-    if (result == -1) {
-        printf("TraceLog: client: write failed.\n");
-        close(socketfd);
+    if (err == -1) {
+        on_error("write failed.", socket_fd);
         return -1;
     }
 
     // Close client socket.
-    close(socketfd);
+    close(socket_fd);
 
     printf("TraceLog: client: main() : X\n");
     return 0;

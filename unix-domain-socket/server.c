@@ -2,18 +2,26 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+void on_error(char* msg, int socket_fd) {
+    if (socket_fd != -1) {
+        close(socket_fd);
+    }
+    printf("TraceLog: server: %s\n", msg);
+}
+
 int main(void) {
     printf("TraceLog: server: main() : E\n");
 
-    int result = 0;
+    int err = 0;
+    int socket_fd = -1;
 
     // Create server socket file discriptor.
-    int socketfd = socket(
+    socket_fd = socket(
             AF_UNIX, // Local connection.
             SOCK_STREAM, // Bi-directional access, bite stream.
             0); // Default protocol.
-    if (socketfd == -1) {
-        printf("TraceLog: server: socketfd != 0\n");
+    if (socket_fd == -1) {
+        on_error("socket_fd != 0", socket_fd);
         return -1;
     }
 
@@ -22,27 +30,25 @@ int main(void) {
     addr.sun_family = AF_UNIX; // Fixed.
     strcpy(addr.sun_path, "socket_file"); // Common socket file.
 
-    // Remove old socket.
+    // Remove old socket. If file exists, bind will be failed.
     remove(addr.sun_path);
 
     // Bind.
-    result = bind(
-            socketfd, // Bind target socket.
+    err = bind(
+            socket_fd, // Bind target socket.
             (struct sockaddr*) &addr, // Socket address.
             sizeof(struct sockaddr_un)); // Address size.
-    if (result != 0) {
-        printf("TraceLog: server: bind failed.\n");
-        close(socketfd);
+    if (err != 0) {
+        on_error("bind failed.", socket_fd);
         return -1;
     }
 
     // Mark passive socket.
-    result = listen(
-            socketfd, // Target socket.
+    err = listen(
+            socket_fd, // Target socket.
             1); // Max connection count.
-    if (result != 0) {
-        printf("TraceLog: server: listen failed.\n");
-        close(socketfd);
+    if (err != 0) {
+        on_error("listen failed.", socket_fd);
         return -1;
     }
 
@@ -50,12 +56,11 @@ int main(void) {
     while(1) {
         // Wait for client connection.
         int fd = accept(
-                socketfd, // Target socket.
+                socket_fd, // Target socket.
                 NULL, // Client address.
                 NULL); // Client address size.
         if (fd == -1) {
-            printf("TraceLog: server: accept failed.\n");
-            close(socketfd);
+            on_error("accept failed.", socket_fd);
             return -1;
         }
 
@@ -66,8 +71,7 @@ int main(void) {
                 buffer, // Receive buffer.
                 sizeof(buffer) - 1); // Receive size. Last byte is null char.
         if (size == -1) {
-            printf("TraceLog: server: read failed.\n");
-            close(socketfd);
+            on_error("read failed.", socket_fd);
             return -1;
         }
 
@@ -76,17 +80,16 @@ int main(void) {
         printf("TraceLog: server: Received Msg = %s\n", buffer);
 
         // Close client fd.
-        result = close(fd); // Closed client connection fd.
-        if (result != 0) {
-            printf("TraceLog: server: close fd failed.\n");
-            close(socketfd);
+        err = close(fd); // Closed client connection fd.
+        if (err != 0) {
+            on_error("close fd failed.", socket_fd);
             return -1;
         }
 
     } // while(true)
 
     // Close server socket.
-    close(socketfd);
+    close(socket_fd);
 
     printf("## server main() : X\n");
     return 0;
