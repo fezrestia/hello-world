@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "sourceMap": true,
+        "target": "es6",
+        "module": "ESNext",
+        "jsx": "react",
+        "moduleResolution": "node",
+        "strict": true
+    },
+    "exclude": [
+        "node_modules"
+    ]
+}
+
