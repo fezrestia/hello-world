@@ -1,4 +1,5 @@
 import * as React from "react";
+import { ClockLabelContext } from "../context";
 
 interface Props {
 }
@@ -10,6 +11,8 @@ interface State {
 export class Clock extends React.Component<Props, State> {
 
   timerId: number = 0;
+
+  static contextType = ClockLabelContext;
 
   constructor(props: Props) {
     super(props);
@@ -43,7 +46,7 @@ export class Clock extends React.Component<Props, State> {
   render() {
     return (
         <div>
-          <p>CURRENT CLOCK : {this.state.date.toLocaleTimeString()}</p>
+          <p>{this.context} : {this.state.date.toLocaleTimeString()}</p>
         </div>
     );
   }
