@@ -153,9 +153,9 @@ def relu_func(x):
     return np.maximum(0.0, x)
 
 def softmax_func(x):
-    c = np.max(x)
+    c = np.max(x, axis = -1, keepdims = True)  # for last dim
     exp_x = np.exp(x - c)  # for anti overflow
-    sum_exp_x = np.sum(exp_x)
+    sum_exp_x = np.sum(exp_x, axis = -1, keepdims = True)
     y = exp_x / sum_exp_x
     return y
 

@@ -3,10 +3,20 @@
 import importlib
 import sys, os
 import numpy as np
+import matplotlib.pyplot as plot
+from collections import OrderedDict
+
 import resource
+from layers import AffineLayer
+from layers import ReluLayer
+from layers import SoftmaxWithLossLayer
 
 def reload():
     importlib.reload(sys.modules[__name__])
+    resource.reload()
+    layers.reload()
+
+
 
 class TwoLayersNet:
     def __init__(self, input_size, hidden_size, output_size, weight_init_std = 0.01):
@@ -18,23 +28,24 @@ class TwoLayersNet:
         self.params["W2"] = weight_init_std * np.random.randn(hidden_size, output_size)
         self.params["b2"] = np.zeros(output_size)
 
+        # Layers
+        self.layers = OrderedDict()
+        self.layers["Affine1"] = AffineLayer(self.params["W1"], self.params["b1"])
+        self.layers["Relu1"] = ReluLayer()
+        self.layers["Affine2"] = AffineLayer(self.params["W2"], self.params["b2"])
+        self.lastLayer = SoftmaxWithLossLayer()
+
     def predict(self, x):
-        W1, W2 = self.params["W1"], self.params["W2"]
-        b1, b2 = self.params["b1"], self.params["b2"]
+        for layer in self.layers.values():
+            x = layer.forward(x)
 
-        a1 = np.dot(x, W1) + b1
-        z1 = resource.sigmoid_func(a1)
-
-        a2 = np.dot(z1, W2) + b2
-        y = resource.softmax_func(a2)
-
-        return y
+        return x
 
     # x: input
     # t: grand truth
     def loss(self, x, t):
         y = self.predict(x)
-        return resource.cross_entropy_error(y, t)
+        return self.lastLayer.forward(y, t)
 
     def accuracy(self, x, t):
         y = self.predict(x)
@@ -58,6 +69,28 @@ class TwoLayersNet:
         grads["b1"] = resource.numerical_gradient(loss_W, self.params["b1"])
         grads["W2"] = resource.numerical_gradient(loss_W, self.params["W2"])
         grads["b2"] = resource.numerical_gradient(loss_W, self.params["b2"])
+
+        return grads
+
+    def gradient(self, x, t):
+        # forward
+        self.loss(x, t)
+
+        # backward
+        dout = 1
+        dout = self.lastLayer.backward(dout)
+
+        layers = list(self.layers.values())
+        layers.reverse()
+        for layer in layers:
+            dout = layer.backward(dout)
+
+        # output
+        grads = {}
+        grads["W1"] = self.layers["Affine1"].dW
+        grads["b1"] = self.layers["Affine1"].db
+        grads["W2"] = self.layers["Affine2"].dW
+        grads["b2"] = self.layers["Affine2"].db
 
         return grads
 
@@ -90,8 +123,27 @@ class TwoLayersNet:
 (img_train, label_train), (img_test, label_test) = \
     resource.load_mnist("./mnist", normalize = True, flatten = True, one_hot_label = True)
 
+
+# check grad
+ONLY_CHECK_GRAD = False
+if ONLY_CHECK_GRAD:
+    network = TwoLayersNet(input_size = 784, hidden_size = 50, output_size = 10)
+
+    img_batch = img_train[:3]
+    label_batch = label_train[:3]
+
+    grad_numerical = network.numerical_gradient(img_batch, label_batch)
+    grad_backprop = network.gradient(img_batch, label_batch)
+
+    for key in grad_numerical.keys():
+        diff = np.average( np.abs(grad_backprop[key] - grad_numerical[key]) )
+        print(key + ":" + str(diff))
+
+    sys.exit()
+
+
 # hyper params
-iters_num = 1000  #10000
+iters_num = 10000
 train_size = img_train.shape[0]
 batch_size = 100
 learning_rate = 0.1
@@ -112,7 +164,8 @@ for i in range(iters_num):
     label_batch = label_train[batch_mask]
 
     # calc grad
-    grad = network.numerical_gradient(img_batch, label_batch)
+    # grad = network.numerical_gradient(img_batch, label_batch)
+    grad = network.gradient(img_batch, label_batch)
 
     # update params
     for key in ("W1", "b1", "W2", "b2"):
@@ -139,13 +192,26 @@ print(f"train_loss_list = {train_loss_list}")
 
 
 
+# loss graph
+plot.figure()
+x = np.arange(iters_num)
+plot.plot(x, train_loss_list, label = "loss", linestyle = "-")
+plot.xlabel("train")
+plot.ylabel("loss")
+
+# accuracy graph
+plot.figure()
+x = np.arange(len(train_acc_list))
+plot.plot(x, train_acc_list, label = "train acc")
+plot.plot(x, test_acc_list, label = "test acc", linestyle='--')
+plot.xlabel("epochs")
+plot.ylabel("accuracy")
+plot.ylim(0, 1.0)
+plot.legend(loc='lower right')
+plot.show()
 
 
-
-
-
-
-
+plot.show()
 
 
 
