@@ -31,7 +31,7 @@ def _load_img(file_path):
     return data
 
 def _change_to_one_hot_label(X):
-    T = np.zeros(X.size, 10)
+    T = np.zeros((X.size, 10))
     for idx, row in enumerate(T):
         row[X[idx]] = 1
     return T
@@ -161,10 +161,86 @@ def softmax_func(x):
 
 
 
+# Numerical Func
+
+def numerical_diff(f, x):
+    h = 1e-4  # 0.0001
+    return (f(x + h) - f(x - h)) / (2 * h)
+
+def _numerical_gradient(f, x):
+    h = 1e-4  # 0.0001
+
+    grad = np.zeros_like(x)
+
+    for idx in range(x.size):
+        tmp_val = x[idx]
+
+        # f(x+h)
+        x[idx] = float(tmp_val) + h
+        fxh1 = f(x)
+
+        # f(x-h)
+        x[idx] = float(tmp_val) - h
+        fxh2 = f(x)
+
+        grad[idx] = (fxh1 - fxh2) / (2 * h)
+
+        x[idx] = tmp_val  # recover
+
+    return grad
+
+def numerical_gradient(f, X):
+    if X.ndim == 1:
+        return _numerical_gradient(f, X)
+    else:
+        grad = np.zeros_like(X)
+
+        for idx, x in enumerate(X):
+            grad[idx] = _numerical_gradient(f, x)
+
+        return grad
+
+
+
+# Learning Method
+
+# lr : learning late
+def gradient_descent(f, init_x, lr = 0.01, step_num = 100):
+    x = init_x
+    x_history = []
+
+    for i in range(step_num):
+        x_history.append(x.copy())
+
+        grad = numerical_gradient(f, x)
+        x -= lr * grad
+
+    return x, np.array(x_history)
+
+
+
+# Evaluate Func
+
+def sum_squared_error(act, exp):
+    return 0.5 * np.sum((act - exp) ** 2)
+
+def cross_entropy_error(act, exp):
+    if act.ndim == 1:
+        act = act.reshape(1, act.size)
+        exp = exp.reshape(1, exp.size)
+
+    batch_size = act.shape[0]
+
+    delta = 1e-7
+    return -1.0 * np.sum(exp * np.log(act + delta)) / batch_size
+
+
+
 # Graph
 
 # elms : [ {x, y, linestyle, label}, ... ]
 def plot_graph(elms):
+    plt.figure()
     for elm in elms:
         plot.plot(elm["x"], elm["y"], linestyle=elm["linestyle"], label=elm["label"])
     plot.xlabel("x")
@@ -173,7 +249,31 @@ def plot_graph(elms):
     plot.legend()
     plot.show()
 
+def plot_2d(pos_x, pos_y, xlim, ylim, x_label, y_label):
+    plot.figure()
+    plot.plot([xlim[0] - 1.0, xlim[1] + 1.0], [0, 0], "--b")
+    plot.plot([0, 0], [ylim[0] - 1.0, ylim[1] + 1.0], "--b")
+    plot.plot(pos_x, pos_y, 'o')
+    plot.xlim(xlim)
+    plot.ylim(ylim)
+    plot.xlabel(x_label)
+    plot.ylabel(y_label)
+    plot.show()
 
+
+
+# pos_x/y, vec_x/y : array
+# xlim, ylim : array [2], min, max
+def plot_2d_vector_field(pos_x, pos_y, vec_x, vec_y, xlim, ylim, x_label, y_label):
+    plot.figure()
+    plot.quiver(pos_x, pos_y, vec_x, vec_y, angles="xy")
+    plot.xlim(xlim)
+    plot.ylim(ylim)
+    plot.xlabel(x_label)
+    plot.ylabel(y_label)
+    plot.grid()
+    plot.draw()
+    plot.show()
 
 
 
