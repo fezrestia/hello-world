@@ -63,7 +63,7 @@ class SigmoidLayer:
         self.out = None
 
     def forward(self, x):
-        out = 1 / (1 + np.exp(-1 * x))
+        out = resource.sigmoid_func(x)
         self.out = out
         return out
 

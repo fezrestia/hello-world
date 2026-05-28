@@ -229,10 +229,15 @@ def cross_entropy_error(act, exp):
         act = act.reshape(1, act.size)
         exp = exp.reshape(1, exp.size)
 
+    delta = 1e-7
     batch_size = act.shape[0]
 
-    delta = 1e-7
-    return -1.0 * np.sum(exp * np.log(act + delta)) / batch_size
+    if exp.size == act.size:
+        # Change one-hot-vector to grand truth label.
+        exp = exp.argmax(axis = 1)
+        return -1.0 * np.sum(np.log(act[np.arange(batch_size), exp] + delta)) / batch_size
+    else:
+        return -1.0 * np.sum(exp * np.log(act + delta)) / batch_size
 
 
 
