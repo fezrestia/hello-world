@@ -34,38 +34,38 @@ class DeepLayerNet:
             weight_decay_lambda = 0.0,
             drop_out_ratio = 0.0,
     ):
+        self.weight_decay_lambda = weight_decay_lambda
+
         connection_size_list = np.concatenate([[input_size], hidden_size_list, [output_size]])
         self.layer_num = len(connection_size_list) - 1  # input->hidden1, hidden1->hidden2, ..., hiddenx->output
 
-        # Params
+        # Params/Layers
         self.params = OrderedDict()
-        for i in range(self.layer_num):
+        self.layers = OrderedDict()
+
+        # input/hidden params
+        for i in range(self.layer_num - 1):
             self.params[f"W{i}"] = weight.gen(connection_size_list[i], connection_size_list[i + 1])
             self.params[f"b{i}"] = np.zeros(connection_size_list[i + 1])
-
             self.params[f"gamma{i}"] = np.ones(connection_size_list[i + 1])
             self.params[f"beta{i}"] = np.zeros(connection_size_list[i + 1])
 
-        # Layers
-        self.layers = OrderedDict()
-
-        # input/hidden
-        for i in range(self.layer_num):
-            layer = Affine(self.params[f"W{i}"], self.params[f"b{i}"])
-            self.layers[f"Affine{i}"] = layer
-
+        # input/hidden layers
+        for i in range(self.layer_num - 1):
+            self.layers[f"Affine{i}"] = Affine(self.params[f"W{i}"], self.params[f"b{i}"])
             self.layers[f"BatchNorm{i}"] = BatchNormalization(self.params[f"gamma{i}"], self.params[f"beta{i}"])
+            self.layers[f"Relu{i}"] = Relu()
+            self.layers[f"DropOut{i}"] = DropOut(drop_out_ratio)
 
-            if i < (self.layer_num - 1):
-                # not output layer
-                self.layers[f"Relu{i}"] = Relu()
+        out_idx = self.layer_num - 1
 
-                self.layers[f"DropOut{i}"] = DropOut(drop_out_ratio)
+        # output params
+        self.params[f"W{out_idx}"] = weight.gen(connection_size_list[out_idx], connection_size_list[out_idx + 1])
+        self.params[f"b{out_idx}"] = np.zeros(connection_size_list[out_idx + 1])
 
-        # output
-        self.output_layer = SoftmaxWithLoss()
-
-        self.weight_decay_lambda = weight_decay_lambda
+        # output layers
+        self.layers[f"Affine{out_idx}"] = Affine(self.params[f"W{out_idx}"], self.params[f"b{out_idx}"])
+        self.loss_layer = SoftmaxWithLoss()
 
     def predict(self, x, is_training = False):
         for key in self.layers:
@@ -87,7 +87,7 @@ class DeepLayerNet:
                 W = self.params[key]
                 weight_decay += 0.5 * self.weight_decay_lambda * np.sum(W ** 2)
 
-        return self.output_layer.forward(y, t) + weight_decay
+        return self.loss_layer.forward(y, t) + weight_decay
 
     def accuracy(self, x, t):
         y = self.predict(x, is_training = False)
@@ -120,7 +120,7 @@ class DeepLayerNet:
 
         # backward
         dout = 1
-        dout = self.output_layer.backward(dout)
+        dout = self.loss_layer.backward(dout)
         for layer in reversed(list(self.layers.values())):
             dout = layer.backward(dout)
 
@@ -177,6 +177,13 @@ SHOW_PLOT = False
 #label_train = label_train[:300]
 
 
+# hyper params
+iters_num = 10000
+train_size = img_train.shape[0]
+batch_size = 100
+learning_rate = 0.001
+
+
 # network def
 network = DeepLayerNet(
         input_size = 784,
@@ -202,12 +209,6 @@ if ONLY_CHECK_GRAD:
 
     sys.exit()
 
-
-# hyper params
-iters_num = 10000
-train_size = img_train.shape[0]
-batch_size = 100
-learning_rate = 0.001
 
 train_loss_list = []
 train_acc_list = []
