@@ -5,12 +5,15 @@ import sys, os
 import numpy as np
 import matplotlib.pyplot as plot
 from collections import OrderedDict
+import re
 
 import resource
 
 from layers.Affine import Affine
 from layers.Relu import Relu
 from layers.SoftmaxWithLoss import SoftmaxWithLoss
+from layers.BatchNormalization import BatchNormalization
+from layers.DropOut import DropOut
 
 from optimizer.StochasticGradientDecent import StochasticGradientDecent
 from optimizer.Momentum import Momentum
@@ -21,37 +24,73 @@ from weight.Random import Random
 from weight.Xavier import Xavier
 from weight.He import He
 
-class TwoLayersNet:
-    def __init__(self, input_size, hidden_size, output_size, weight = Random(0.01)):
-        self.params = {}
+class DeepLayerNet:
+    def __init__(
+            self,
+            input_size,
+            hidden_size_list,
+            output_size,
+            weight = Random(0.01),
+            weight_decay_lambda = 0.0,
+            drop_out_ratio = 0.0,
+    ):
+        connection_size_list = np.concatenate([[input_size], hidden_size_list, [output_size]])
+        self.layer_num = len(connection_size_list) - 1  # input->hidden1, hidden1->hidden2, ..., hiddenx->output
 
-        # Init weight
-        self.params["W1"] = weight.gen(input_size, hidden_size)
-        self.params["b1"] = np.zeros(hidden_size)
-        self.params["W2"] = weight.gen(hidden_size, output_size)
-        self.params["b2"] = np.zeros(output_size)
+        # Params
+        self.params = OrderedDict()
+        for i in range(self.layer_num):
+            self.params[f"W{i}"] = weight.gen(connection_size_list[i], connection_size_list[i + 1])
+            self.params[f"b{i}"] = np.zeros(connection_size_list[i + 1])
+
+            self.params[f"gamma{i}"] = np.ones(connection_size_list[i + 1])
+            self.params[f"beta{i}"] = np.zeros(connection_size_list[i + 1])
 
         # Layers
         self.layers = OrderedDict()
-        self.layers["Affine1"] = Affine(self.params["W1"], self.params["b1"])
-        self.layers["Relu1"] = Relu()
-        self.layers["Affine2"] = Affine(self.params["W2"], self.params["b2"])
-        self.lastLayer = SoftmaxWithLoss()
 
-    def predict(self, x):
-        for layer in self.layers.values():
-            x = layer.forward(x)
+        # input/hidden
+        for i in range(self.layer_num):
+            layer = Affine(self.params[f"W{i}"], self.params[f"b{i}"])
+            self.layers[f"Affine{i}"] = layer
 
+            self.layers[f"BatchNorm{i}"] = BatchNormalization(self.params[f"gamma{i}"], self.params[f"beta{i}"])
+
+            if i < (self.layer_num - 1):
+                # not output layer
+                self.layers[f"Relu{i}"] = Relu()
+
+                self.layers[f"DropOut{i}"] = DropOut(drop_out_ratio)
+
+        # output
+        self.output_layer = SoftmaxWithLoss()
+
+        self.weight_decay_lambda = weight_decay_lambda
+
+    def predict(self, x, is_training = False):
+        for key in self.layers:
+            layer = self.layers[key]
+            if isinstance(layer, BatchNormalization) or isinstance(layer, DropOut):
+                x = layer.forward(x, is_training)
+            else:
+                x = layer.forward(x)
         return x
 
     # x: input
     # t: grand truth
-    def loss(self, x, t):
-        y = self.predict(x)
-        return self.lastLayer.forward(y, t)
+    def loss(self, x, t, is_training = False):
+        y = self.predict(x, is_training)
+
+        weight_decay = 0
+        for key in self.params:
+            if re.search(r"^W\d+$", key):
+                W = self.params[key]
+                weight_decay += 0.5 * self.weight_decay_lambda * np.sum(W ** 2)
+
+        return self.output_layer.forward(y, t) + weight_decay
 
     def accuracy(self, x, t):
-        y = self.predict(x)
+        y = self.predict(x, is_training = False)
         y = np.argmax(y, axis = 1)
         t = np.argmax(t, axis = 1)
 
@@ -63,37 +102,41 @@ class TwoLayersNet:
     # t: grand truth
     def numerical_gradient(self, x, t):
         # loss func
-        loss_W = lambda W: self.loss(x, t)
+        loss_W = lambda W: self.loss(x, t, is_training = True)
 
         grads = {}
 
-        # calculate grad of loss function with current weight params
-        grads["W1"] = resource.numerical_gradient(loss_W, self.params["W1"])
-        grads["b1"] = resource.numerical_gradient(loss_W, self.params["b1"])
-        grads["W2"] = resource.numerical_gradient(loss_W, self.params["W2"])
-        grads["b2"] = resource.numerical_gradient(loss_W, self.params["b2"])
+        for i in range(self.layer_num):
+            grads[f"W{i}"] = resource.numerical_gradient(loss_W, self.params[f"W{i}"])
+            grads[f"b{i}"] = resource.numerical_gradient(loss_W, self.params[f"b{i}"])
+            grads[f"gamma{i}"] = resource.numerical_gradient(loss_W, self.params[f"gamma{i}"])
+            grads[f"beta{i}"] = resource.numerical_gradient(loss_W, self.params[f"beta{i}"])
 
         return grads
 
     def gradient(self, x, t):
         # forward
-        self.loss(x, t)
+        self.loss(x, t, is_training = True)
 
         # backward
         dout = 1
-        dout = self.lastLayer.backward(dout)
-
-        layers = list(self.layers.values())
-        layers.reverse()
-        for layer in layers:
+        dout = self.output_layer.backward(dout)
+        for layer in reversed(list(self.layers.values())):
             dout = layer.backward(dout)
 
         # output
         grads = {}
-        grads["W1"] = self.layers["Affine1"].dW
-        grads["b1"] = self.layers["Affine1"].db
-        grads["W2"] = self.layers["Affine2"].dW
-        grads["b2"] = self.layers["Affine2"].db
+        for key in self.layers:
+            layer = self.layers[key]
+            idx = int(re.search(r"\d+$", key).group())
+
+            if isinstance(layer, Affine):
+                grads[f"W{idx}"] = layer.dW + self.weight_decay_lambda * self.params[f"W{idx}"]
+                grads[f"b{idx}"] = layer.db
+
+            if isinstance(layer, BatchNormalization):
+                grads[f"gamma{idx}"] = layer.dgamma
+                grads[f"beta{idx}"] = layer.dbeta
 
         return grads
 
@@ -129,16 +172,24 @@ SHOW_PLOT = False
 (img_train, label_train), (img_test, label_test) = \
     resource.load_mnist("./mnist", normalize = True, flatten = True, one_hot_label = True)
 
+# for overfitting test
+#img_train = img_train[:300]
+#label_train = label_train[:300]
+
+
+# network def
+network = DeepLayerNet(
+        input_size = 784,
+        hidden_size_list = [392, 196, 98, 49, 7],
+        output_size = 10,
+        weight = He(),
+        weight_decay_lambda = 0.000001,
+        drop_out_ratio = 0.001,
+)
+
 
 # check grad
 if ONLY_CHECK_GRAD:
-    network = TwoLayersNet(
-            input_size = 784,
-            hidden_size = 50,
-            output_size = 10,
-            weight = He(),
-    )
-
     img_batch = img_train[:3]
     label_batch = label_train[:3]
 
@@ -146,7 +197,7 @@ if ONLY_CHECK_GRAD:
     grad_backprop = network.gradient(img_batch, label_batch)
 
     for key in grad_numerical.keys():
-        diff = np.average( np.abs(grad_backprop[key] - grad_numerical[key]) )
+        diff = np.average(np.abs(grad_backprop[key] - grad_numerical[key]))
         print(key + ":" + str(diff))
 
     sys.exit()
@@ -156,7 +207,7 @@ if ONLY_CHECK_GRAD:
 iters_num = 10000
 train_size = img_train.shape[0]
 batch_size = 100
-learning_rate = 0.01
+learning_rate = 0.001
 
 train_loss_list = []
 train_acc_list = []
@@ -164,13 +215,6 @@ test_acc_list = []
 
 # loop count for each epoch
 iter_per_epoch = max(train_size / batch_size, 1)
-
-network = TwoLayersNet(
-        input_size = 784,
-        hidden_size = 50,
-        output_size = 10,
-        weight = He(),
-)
 
 sgd = StochasticGradientDecent(lr = learning_rate)
 momentum = Momentum(lr = learning_rate, momentum = 0.9)
@@ -184,7 +228,6 @@ for i in range(iters_num):
     label_batch = label_train[batch_mask]
 
     # calc grad
-    # grad = network.numerical_gradient(img_batch, label_batch)
     grad = network.gradient(img_batch, label_batch)
 
     # update params
@@ -211,6 +254,7 @@ for i in range(iters_num):
 for idx, loss in enumerate(train_loss_list):
     if idx % batch_size == 0:
         print(f"train_loss_list[{idx}] = {loss}")
+
 
 
 
