@@ -145,7 +145,7 @@ class DeepLayerNet:
 # RUN
 
 ONLY_CHECK_GRAD = False
-SHOW_PLOT = False
+SHOW_PLOT = True
 
 # dummy run
 #
