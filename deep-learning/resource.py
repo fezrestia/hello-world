@@ -200,6 +200,46 @@ def numerical_gradient(f, X):
 
         return grad
 
+# input data shape  : N(batch num), Channel, Height, Width
+# output data shape : (N x OutH x OutW), (Channel x filter_h x filter_w)
+def img2col(input_nchw_data, filter_h, filter_w, stride = 1, padding = 0):
+    N, C, H, W = input_nchw_data.shape
+    out_h = (H + 2 * padding - filter_h) // stride + 1
+    out_w = (W + 2 * padding - filter_w) // stride + 1
+
+    img = np.pad(input_nchw_data, [(0, 0), (0, 0), (padding, padding), (padding, padding)], 'constant')
+    col = np.zeros((N, C, filter_h, filter_w, out_h, out_w))
+
+    for y in range(filter_h):
+        y_max = y + stride * out_h
+        for x in range(filter_w):
+            x_max = x + stride * out_w
+            col[:, :, y, x, :, :] = img[:, :, y:y_max:stride, x:x_max:stride]
+
+    col = col.transpose(0, 4, 5, 1, 2, 3).reshape(N * out_h * out_w, -1)
+    return col
+
+# col : reshapable to (N, out_h, out_w, C, filter_h, filter_w)
+# img : N, C, H, W
+def col2img(col, input_shape, filter_h, filter_w, stride = 1, padding = 0):
+    N, C, H, W = input_shape
+    out_h = (H + 2 * padding - filter_h) // stride + 1
+    out_w = (W + 2 * padding - filter_w) // stride + 1
+
+    # col shape : (N x OutH x OutW), (Channel x filter_h x filter_w)
+    #               -> N, OutH, OutW, Channel, filter_h, filter_w
+    #               -> N, Channel, filter_h, filter_w, OutH, OutW
+    col = col.reshape(N, out_h, out_w, C, filter_h, filter_w).transpose(0, 3, 4, 5, 1, 2)
+
+    img = np.zeros((N, C, H + 2 * padding + stride - 1, W + 2 * padding + stride - 1))
+    for y in range(filter_h):
+        y_max = y + stride * out_h
+        for x in range(filter_w):
+            x_max = x + stride * out_w
+            img[:, :, y:y_max:stride, x:x_max:stride] += col[:, :, y, x, :, :]
+
+    return img[:, :, padding:H + padding, padding:W + padding]
+
 
 
 # Learning Method
