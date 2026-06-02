@@ -2,6 +2,9 @@ import numpy as np
 
 class DropOut:
     def __init__(self, drop_out_ratio = 0.001):
+        self.params = []
+        self.grads = []
+
         self.drop_out_ratio = drop_out_ratio
         self.mask = None
 

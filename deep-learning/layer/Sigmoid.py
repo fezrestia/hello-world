@@ -2,12 +2,15 @@ import numpy as np
 
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import resource
 
 class Sigmoid:
     def __init__(self):
+        self.params = []
+        self.grads = []
+
         self.out = None
 
     def forward(self, x):

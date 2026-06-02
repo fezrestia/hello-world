@@ -6,6 +6,8 @@ class Convolution:
     def __init__(self, W, b, stride = 1, padding = 0):
         self.W = W
         self.b = b
+        self.params = [self.W, self.b]
+
         self.stride = stride
         self.padding = padding
 
@@ -14,8 +16,9 @@ class Convolution:
         self.col = None
         self.col_W = None
 
-        self.dW = None
-        self.db = None
+        self.dW = np.zeros_like(W)
+        self.db = np.zeros_like(b)
+        self.grads = [self.dW, self.db]
 
     # x shape   : N, C, H, W
     # out shape : N, FN, OutH, OutW

@@ -4,6 +4,9 @@ import resource
 
 class Pooling:
     def __init__(self, pool_h, pool_w, stride = 2, padding = 0):
+        self.params = []
+        self.grads = []
+
         self.pool_h = pool_h
         self.pool_w = pool_w
         self.stride = stride

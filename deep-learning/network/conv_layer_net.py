@@ -8,7 +8,7 @@ import matplotlib.pyplot as plot
 from collections import OrderedDict
 
 from pathlib import Path
-root_dir = str(Path(__file__).resolve().parent.parent
+root_dir = str(Path(__file__).resolve().parent.parent)
 sys.path.insert(0, root_dir)
 
 import resource

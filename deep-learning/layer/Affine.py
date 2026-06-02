@@ -4,9 +4,13 @@ class Affine:
     def __init__(self, W, b):
         self.W = W
         self.b = b
+        self.params = [self.W, self.b]
+
+        self.dW = np.zeros_like(W)
+        self.db = np.zeros_like(b)
+        self.grads = [self.dW, self.db]
+
         self.x = None
-        self.dW = None
-        self.db = None
         self.original_x_shape = None
 
     def forward(self, x):
@@ -21,8 +25,8 @@ class Affine:
 
     def backward(self, dout):
         dx = np.dot(dout, self.W.T)
-        self.dW = np.dot(self.x.T, dout)
-        self.db = np.sum(dout, axis = 0)
+        self.dW[...] = np.dot(self.x.T, dout)
+        self.db[...] = np.sum(dout, axis = 0)
 
         # for tensor (1 key vs. other flattened)
         dx = dx.reshape(*self.original_x_shape)

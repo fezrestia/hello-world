@@ -2,6 +2,9 @@ import numpy as np
 
 class Relu:
     def __init__(self):
+        self.params = []
+        self.grads = []
+
         self.mask = None
 
     def forward(self, x):
