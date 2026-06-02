@@ -3,6 +3,11 @@
 import importlib
 import sys, os
 import numpy as np
+
+from pathlib import Path
+root_dir = str(Path(__file__).resolve().parent.parent
+sys.path.insert(0, root_dir)
+
 import resource
 
 def reload():

@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 
-import resource
-
+import sys
 import pickle
 import numpy as np
 
+from pathlib import Path
+root_dir = str(Path(__file__).resolve().parent.parent)
+sys.path.insert(0, root_dir)
+
+import resource
+
 def get_data():
     (img_train, label_train), (img_test, label_test) = \
-            resource.load_mnist("./mnist", normalize = True, flatten = True, one_hot_label = False)
+            resource.load_mnist(root_dir + "/mnist", normalize = True, flatten = True, one_hot_label = False)
     return img_test, label_test
 
 def init_network():
-    with open("./mnist/sample_weight.pkl", "rb") as f:
+    with open(root_dir + "/mnist/sample_weight.pkl", "rb") as f:
         network = pickle.load(f)
     return network
 

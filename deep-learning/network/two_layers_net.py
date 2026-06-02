@@ -6,11 +6,15 @@ import numpy as np
 import matplotlib.pyplot as plot
 from collections import OrderedDict
 
+from pathlib import Path
+root_dir = str(Path(__file__).resolve().parent.parent)
+sys.path.insert(0, root_dir)
+
 import resource
 
-from layers.Affine import Affine
-from layers.Relu import Relu
-from layers.SoftmaxWithLoss import SoftmaxWithLoss
+from layer.Affine import Affine
+from layer.Relu import Relu
+from layer.SoftmaxWithLoss import SoftmaxWithLoss
 
 from optimizer.StochasticGradientDecent import StochasticGradientDecent
 from optimizer.Momentum import Momentum
@@ -127,7 +131,7 @@ SHOW_PLOT = False
 
 # data
 (img_train, label_train), (img_test, label_test) = \
-    resource.load_mnist("./mnist", normalize = True, flatten = True, one_hot_label = True)
+    resource.load_mnist(str(Path(__file__).resolve().parent.parent) + "/mnist", normalize = True, flatten = True, one_hot_label = True)
 
 
 # check grad
