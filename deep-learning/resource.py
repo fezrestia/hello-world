@@ -101,6 +101,46 @@ def ppmi(word_vs_vec, verbose = False, eps = 1e-8):
 
     return M
 
+def create_contexts_vs_target(corpus, window_size = 1):
+    target = corpus[window_size : -window_size]
+    contexts = []
+
+    for idx in range(window_size, len(corpus) - window_size):
+        ctx = []
+        for t in range(-window_size, window_size + 1):
+            if t == 0:
+                # t == 0 means target position
+                continue
+            ctx.append(corpus[idx + t])
+        contexts.append(ctx)
+
+    return np.array(contexts), np.array(target)
+
+# ids : 1 or 2 dimens word id list
+# vocab_size : num of words
+# return : 2 or 3 dimens onehot array
+def convert_idx_to_onehot(ids, vocab_size):
+    N = ids.shape[0]
+
+    if ids.ndim == 1:
+        # target word id list.
+        onehot = np.zeros((N, vocab_size), dtype = np.int32)
+        for n, word_id in enumerate(ids):
+            onehot[n, word_id] = 1
+
+    elif ids.ndim == 2:
+        # context word id set list.
+        ctx_num = ids.shape[1]
+        onehot = np.zeros((N, ctx_num, vocab_size), dtype = np.int32)
+        for n, ctx_ids in enumerate(ids):
+            for i, ctx_id in enumerate(ctx_ids):
+                onehot[n, i, ctx_id] = 1
+
+    return onehot
+
+
+
+
 
 
 # MNIST
