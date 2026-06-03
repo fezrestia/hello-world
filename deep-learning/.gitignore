@@ -1,5 +1,7 @@
 /venv/
 /mnist/mnist.pkl
+/dataset/ptb/*.pkl
+/dataset/ptb/*.npy
 
 __pycache__/
 
