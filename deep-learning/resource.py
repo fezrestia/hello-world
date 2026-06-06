@@ -138,8 +138,48 @@ def convert_idx_to_onehot(ids, vocab_size):
 
     return onehot
 
+def normalize(x):
+    if x.ndim == 2:
+        s = np.sqrt((x * x).sum(1))
+        x /= s.reshape((s.shape[0], 1))
+    elif x.ndim == 1:
+        s = np.sqrt((x * x).sum())
+        x /= s
+    return x
 
+def analogy(a, b, x, word_vs_id, id_vs_word, word_vs_vec, top = 5, answer = None):
+    for word in (a, b, x):
+        if word not in word_vs_id:
+            print(f"{word} is not found.")
+            return
 
+    print(f"\n[analogy] {a}->{b} : {x}->?")
+    a_vec = word_vs_vec[word_vs_id[a]]
+    b_vec = word_vs_vec[word_vs_id[b]]
+    x_vec = word_vs_vec[word_vs_id[x]]
+
+    query_vec = b_vec - a_vec + x_vec
+    query_vec = normalize(query_vec)
+
+    similarity = np.dot(word_vs_vec, query_vec)
+
+    if answer is not None:
+        if answer not in word_vs_id:
+            print(f"answer = {answer} is not found")
+        else:
+            print(f"  > {answer} : {str(np.dot(word_vs_vec[word_vs_id[answer]], query_vec))}")
+
+    count = 0
+    for i in (-1 * similarity).argsort():
+        if np.isnan(similarity[i]):
+            continue
+        if id_vs_word[i] in (a, b, x):
+            continue
+        print(f"  {format(id_vs_word[i])} : {similarity[i]}")
+
+        count += 1
+        if count >= top:
+            return
 
 
 
