@@ -81,7 +81,7 @@ class RNNLMTrainer:
                 if (eval_interval is not None) and (iters % eval_interval) == 0:
                     perplexity = np.exp(total_loss / loss_count)
                     elapsed_time = time.time() - start_time
-                    print(f"epoch = {epoch}, iter = {iter}, time = {elapsed_time}, perplexity = {perplexity}")
+                    print(f"epoch = {epoch}/{max_epoch}, iter = {iters}/{max_iters}, time = {elapsed_time}, perplexity = {perplexity}")
 
                     self.ppl_list.append(float(perplexity))
 
