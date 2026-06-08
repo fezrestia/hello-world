@@ -1,9 +1,13 @@
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-from trainer.Trainer import remove_duplicate
-from trainer.Trainer import clip_grads
+from pathlib import Path
+root_dir = str(Path(__file__).resolve().parent.parent)
+sys.path.insert(0, root_dir)
+
+import resource
 
 class RNNLMTrainer:
     def __init__(self, model, optimizer):
@@ -64,10 +68,10 @@ class RNNLMTrainer:
                 loss = model.forward(batch_x, batch_t)
                 model.backward()
 
-                params, grads = remove_duplicate(model.params, model.grads)
+                params, grads = resource.remove_duplicate(model.params, model.grads)
 
                 if max_grad is not None:
-                    clip_grads(grads, max_grad)
+                    resource.clip_grads(grads, max_grad)
 
                 optimizer.update(dict(enumerate(params)), dict(enumerate(grads)))
 
