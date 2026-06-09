@@ -105,82 +105,83 @@ class DeepLSTMLM:
 
 
 # RUN
-import dataset.ptb as ptb
+if __name__ == "__main__":
+    import dataset.ptb as ptb
 
-# hyper params
-batch_size = 20
-wordvec_size = 650
-hidden_size = 650
-time_size = 35  # for truncated backward propagation time through
-learning_rate = 20.0
-max_epoch = 40
-max_grad = 0.25
-dropout = 0.5
+    # hyper params
+    batch_size = 20
+    wordvec_size = 650
+    hidden_size = 650
+    time_size = 35  # for truncated backward propagation time through
+    learning_rate = 20.0
+    max_epoch = 40
+    max_grad = 0.25
+    dropout = 0.5
 
-# data
-corpus, word_vs_id, id_vs_word = ptb.load_data("train")
-corpus_test, _, _ = ptb.load_data("test")
-corpus_val, _, _ = ptb.load_data("valid")
+    # data
+    corpus, word_vs_id, id_vs_word = ptb.load_data("train")
+    corpus_test, _, _ = ptb.load_data("test")
+    corpus_val, _, _ = ptb.load_data("valid")
 
-vocab_size = len(word_vs_id)
+    vocab_size = len(word_vs_id)
 
-# learning data / grand truth
-# data : [1, 2, 3, 4, 5]
-#   xs : [1, 2, 3, 4   ]
-#   ts : [   2, 3, 4, 5]
-# 1->2, 2->3, ...
-xs = corpus[:-1]
-ts = corpus[1:]
-print(f"corpus size = {corpus.shape}, vocab size = {vocab_size}")
-
-
-model = DeepLSTMLM(vocab_size, wordvec_size, hidden_size, dropout)
-
-optimizer = StochasticGradientDecent(learning_rate)
-
-trainer = RNNLMTrainer(model, optimizer)
+    # learning data / grand truth
+    # data : [1, 2, 3, 4, 5]
+    #   xs : [1, 2, 3, 4   ]
+    #   ts : [   2, 3, 4, 5]
+    # 1->2, 2->3, ...
+    xs = corpus[:-1]
+    ts = corpus[1:]
+    print(f"corpus size = {corpus.shape}, vocab size = {vocab_size}")
 
 
-script_dir = Path(__file__).resolve().parent
-data_dir = str(script_dir) + "/../dataset/ptb"
-pkl_file = f"{data_dir}/lstmlm_params.pkl"
+    model = DeepLSTMLM(vocab_size, wordvec_size, hidden_size, dropout)
 
-best_perplexity = float("inf")
-for epoch in range(max_epoch):
-    trainer.fit(
-            xs,
-            ts,
-            max_epoch = 1,
-            batch_size = batch_size,
-            time_size = time_size,
-            max_grad = max_grad,
-    )
+    optimizer = StochasticGradientDecent(learning_rate)
 
+    trainer = RNNLMTrainer(model, optimizer)
+
+
+    script_dir = Path(__file__).resolve().parent
+    data_dir = str(script_dir) + "/../dataset/ptb"
+    pkl_file = f"{data_dir}/lstmlm_params.pkl"
+
+    best_perplexity = float("inf")
+    for epoch in range(max_epoch):
+        trainer.fit(
+                xs,
+                ts,
+                max_epoch = 1,
+                batch_size = batch_size,
+                time_size = time_size,
+                max_grad = max_grad,
+        )
+
+        model.reset_state()
+        perplexity_val = resource.eval_perplexity(model, corpus_val)
+        print(f"valid perplexity = {perplexity_val}")
+
+        if best_perplexity > perplexity_val:
+            best_perplexity = perplexity_val
+            model.save_params
+        else:
+            learning_rate /= 4.0
+            optimizer.learning_rate = learning_rate
+
+        model.reset_state()
+        print(f"----------------------------------------------------------------")
+
+
+
+    # TEST
     model.reset_state()
-    perplexity_val = resource.eval_perplexity(model, corpus_val)
-    print(f"valid perplexity = {perplexity_val}")
+    perplexity_test = resource.eval_perplexity(model, corpus_test)
+    print(f"test perplexity = {perplexity_test}")
 
-    if best_perplexity > perplexity_val:
-        best_perplexity = perplexity_val
-        model.save_params
-    else:
-        learning_rate /= 4.0
-        optimizer.learning_rate = learning_rate
+    #script_dir = Path(__file__).resolve().parent
+    #data_dir = str(script_dir) + "/../dataset/ptb"
+    #pkl_file = f"{data_dir}/lstmlm_params.pkl"
+    #model.save_params(pkl_file)
 
-    model.reset_state()
-    print(f"----------------------------------------------------------------")
-
-
-
-# TEST
-model.reset_state()
-perplexity_test = resource.eval_perplexity(model, corpus_test)
-print(f"test perplexity = {perplexity_test}")
-
-#script_dir = Path(__file__).resolve().parent
-#data_dir = str(script_dir) + "/../dataset/ptb"
-#pkl_file = f"{data_dir}/lstmlm_params.pkl"
-#model.save_params(pkl_file)
-
-trainer.plot(ylim = (0, 500))
+    trainer.plot(ylim = (0, 500))
 

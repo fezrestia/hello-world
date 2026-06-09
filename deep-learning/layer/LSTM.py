@@ -19,13 +19,22 @@ class LSTM:
 
         self.cache = None
 
+    # x : (N, D) = batch x 1 word vec
+    # h_prev : (N, H)
+    # c_prev : (N, H)
     def forward(self, x, h_prev, c_prev):
+        # Wx : (D, 4 x H)
+        # Wh : (H, 4 x H)
+        # b  : (4 x H, )
         Wx, Wh, b = self.params
         N, H = h_prev.shape
 
+        # x x Wx : (N, 4 x H)
+        # h_prev x Wh : (N, 4 x H)
+        # A : (N, 4 x H)
         A = np.dot(x, Wx) + np.dot(h_prev, Wh) + b
 
-        # slice
+        # slice : (N, 4 x H) -> 4 x (N, H)
         f = A[:, :H]
         g = A[:, H : 2 * H]
         i = A[:, 2 * H : 3 * H]
@@ -36,6 +45,7 @@ class LSTM:
         i = resource.sigmoid_func(i)
         o = resource.sigmoid_func(o)
 
+        # c_next / h_next : (N, H)
         c_next = f * c_prev + g * i
         h_next = o * np.tanh(c_next)
 

@@ -524,6 +524,44 @@ def eval_perplexity(model, corpus, batch_size = 10, time_size = 35):
     ppl = np.exp(total_loss / max_iters)
     return ppl
 
+def eval_seq2seq(
+        model,
+        question,
+        correct,
+        id_vs_char,
+        verbose = False,
+        is_reverse = False,
+):
+    correct = correct.flatten()
+
+    start_id = correct[0]  # _
+    correct = correct[1:]
+
+    guess = model.generate(question, start_id, len(correct))
+
+    question = ''.join([id_vs_char[int(c)] for c in question.flatten()])
+    correct = ''.join([id_vs_char[int(c)] for c in correct])
+    guess = ''.join([id_vs_char[int(c)] for c in guess])
+
+    if verbose:
+        if is_reverse:
+            question = question[::-1]
+
+        colors = {
+            "OK": "\033[92m",
+            "NG": "\033[91m",
+            "CLOSE": "\033[0m",
+        }
+
+        if correct == guess:
+            mark = colors["OK"] + "OK" + colors["CLOSE"]
+        else:
+            mark = colors["NG"] + "NG" + colors["CLOSE"]
+
+        print(f"Q={question}, T={correct}, A={guess} : {mark}")
+
+    return 1 if guess == correct else 0
+
 
 
 # Graph
