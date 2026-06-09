@@ -14,6 +14,8 @@ from layer.TimeSoftmaxWithLoss import TimeSoftmaxWithLoss
 from network.SequenceEncoder import SequenceEncoder
 from network.SequenceDecoder import SequenceDecoder
 from network.PeekySequenceDecoder import PeekySequenceDecoder
+from network.AttentionEncoder import AttentionEncoder
+from network.AttentionDecoder import AttentionDecoder
 
 from optimizer.Adam import Adam
 
@@ -25,9 +27,12 @@ class Seq2Seq:
         D = wordvec_size
         H = hidden_size
 
-        self.encoder = SequenceEncoder(V, D, H)
+        # self.encoder = SequenceEncoder(V, D, H)
+        self.encoder = AttentionEncoder(V, D, H)
+
         # self.decoder = SequenceDecoder(V, D, H)
-        self.decoder = PeekySequenceDecoder(V, D, H)
+        # self.decoder = PeekySequenceDecoder(V, D, H)
+        self.decoder = AttentionDecoder(V, D, H)
 
         self.softmax = TimeSoftmaxWithLoss()
 
@@ -63,7 +68,7 @@ if __name__ == "__main__":
     import dataset.sequence as sequence
 
     # data
-    (x_train, t_train), (x_test, t_test) = sequence.load_data("addition.txt")
+    (x_train, t_train), (x_test, t_test) = sequence.load_data("date.txt")
     char_vs_id, id_vs_char = sequence.get_vocab()
 
     # reverse data
@@ -73,9 +78,9 @@ if __name__ == "__main__":
     # hyper params
     vocab_size = len(char_vs_id)
     wordvec_size = 16
-    hidden_size = 128
+    hidden_size = 256
     batch_size = 128
-    max_epoch = 25
+    max_epoch = 10
     max_grad = 5.0
 
     model = Seq2Seq(vocab_size, wordvec_size, hidden_size)
