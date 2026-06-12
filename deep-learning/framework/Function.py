@@ -2,63 +2,226 @@ import sys
 from pathlib import Path
 from typing import override
 import numpy as np
+import weakref
 
 # include same dir layer.
 same_dir = str(Path(__file__).resolve().parent)
 sys.path.insert(0, same_dir)
 
 from Variable import Variable
+from Config import Config
+from Type import Scalar, ScalarTypes
 
 class Function:
-    def __call__(self, input: Variable) -> Variable:
-        self.input: Variable = input
+    def __call__(self, *raw_inputs: Variable|np.ndarray) -> tuple[Variable, ...]:
+        inputs: tuple[Variable, ...] = tuple([as_variable(x) for x in raw_inputs])
 
-        x = input.data
-        y = self.forward(x)
+        xs: tuple[np.ndarray, ...] = tuple([x.data for x in inputs])
+        ys: tuple[np.ndarray, ...] = self.forward(xs)
 
-        output: Variable = Variable(as_array(y))
-        output.set_creator(self)
-        self.output = output
+        outputs: tuple[Variable, ...] = tuple([Variable(as_array(y)) for y in ys])
 
-        return output
+        if Config.enable_backprop:
+            self.generation: int = max([x.generation for x in inputs])
+            for output in outputs:
+                output.set_creator(self)
+            self.inputs: tuple[Variable, ...] = inputs
+            self.outputs = [weakref.ref(o) for o in outputs]
 
-    def forward(self, x: np.ndarray) -> np.ndarray:
+        return outputs
+
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
         raise NotImplementedError()
 
-    def backward(self, gy: np.ndarray) -> np.ndarray:
+    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
         raise NotImplementedError()
 
 
 class Square(Function):
     @override
-    def forward(self, x):
-        y = x ** 2
-        return y
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        y: np.ndarray = x ** 2
+        return (y,)
 
     @override
-    def backward(self, gy):
-        x = self.input.data
-        gx = 2 * x * gy
-        return gx
+    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        gy: np.ndarray = gys[0]
+        x: np.ndarray = self.inputs[0].data  # square has only 1 input stored in tuple[Variable]
+        gx: np.ndarray = 2 * x * gy
+        return (gx,)
 
-def square(x: Variable):
-    return Square()(x)
+def square(x: Variable) -> Variable:
+    y: Variable
+    y, = Square()(x)
+    return y
 
 
 class Exp(Function):
     @override
-    def forward(self, x):
-        y = np.exp(x)
-        return y
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        y: np.ndarray = np.exp(x)
+        return (y,)
 
     @override
-    def backward(self, gy):
-        x = self.input.data
-        gx = np.exp(x) * gy
-        return gx
+    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = self.inputs[0].data  # exp has only 1 input stored in tuple[Variable]
+        gy: np.ndarray = gys[0]
+        gx: np.ndarray = np.exp(x) * gy
+        return (gx,)
 
-def exp(x: Variable):
-    return Exp()(x)
+def exp(x: Variable) -> Variable:
+    y: Variable
+    y, = Exp()(x)
+    return y
+
+
+class Add(Function):
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x0: np.ndarray = xs[0]
+        x1: np.ndarray = xs[1]
+        y: np.ndarray = x0 + x1
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        gy: np.ndarray = gys[0]
+        return (gy, gy)
+
+def add(x0: Variable, x1: Variable|np.ndarray|Scalar) -> Variable:
+    y: Variable
+    if isinstance(x1, ScalarTypes):
+        y, = Add()(x0, as_array(x1))
+    else:
+        y, = Add()(x0, x1)
+    return y
+
+
+class Mul(Function):
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x0: np.ndarray = xs[0]
+        x1: np.ndarray = xs[1]
+        y: np.ndarray = x0 * x1
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x0: np.ndarray = self.inputs[0].data
+        x1: np.ndarray = self.inputs[1].data
+        gy: np.ndarray = gys[0]
+        gx0: np.ndarray = gy * x1
+        gx1: np.ndarray = gy * x0
+        return (gx0, gx1)
+
+def mul(x0: Variable, x1: Variable|np.ndarray|Scalar) -> Variable:
+    y: Variable
+    if isinstance(x1, ScalarTypes):
+        y, = Mul()(x0, as_array(x1))
+    else:
+        y, = Mul()(x0, x1)
+    return y
+
+
+class Neg(Function):
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        return (-x,)
+
+    @override
+    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        gy: np.ndarray = gys[0]
+        return (-gy,)
+
+def neg(x: Variable) -> Variable:
+    return Neg()(x)[0]
+
+
+class Sub(Function):
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x0: np.ndarray = xs[0]
+        x1: np.ndarray = xs[1]
+        y: np.ndarray = x0 - x1
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        gy: np.ndarray = gys[0]
+        return (gy, -gy)
+
+def sub(x0: Variable|np.ndarray|Scalar, x1: Variable|np.ndarray|Scalar) -> Variable:
+    y: Variable
+    if isinstance(x0, ScalarTypes):
+        if isinstance(x1, ScalarTypes):
+            y, = Sub()(as_array(x0), as_array(x1))
+        else:
+            y, = Sub()(as_array(x0), x1)
+    else:
+        if isinstance(x1, ScalarTypes):
+            y, = Sub()(x0, as_array(x1))
+        else:
+            y, = Sub()(x0, x1)
+    return y
+
+
+class Div(Function):
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x0: np.ndarray = xs[0]
+        x1: np.ndarray = xs[1]
+        y: np.ndarray = x0 / x1
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x0: np.ndarray = self.inputs[0].data
+        x1: np.ndarray = self.inputs[1].data
+        gy: np.ndarray = gys[0]
+        gx0 = gy / x1
+        gx1 = gy * (-x0 / x1 ** 2)
+        return (gx0, gx1)
+
+def div(x0: Variable|np.ndarray|Scalar, x1: Variable|np.ndarray|Scalar) -> Variable:
+    y: Variable
+    if isinstance(x0, ScalarTypes):
+        if isinstance(x1, ScalarTypes):
+            y, = Div()(as_array(x0), as_array(x1))
+        else:
+            y, = Div()(as_array(x0), x1)
+    else:
+        if isinstance(x1, ScalarTypes):
+            y, = Div()(x0, as_array(x1))
+        else:
+            y, = Div()(x0, x1)
+    return y
+
+
+class Pow(Function):
+    def __init__(self, c: int):
+        self.c: int = c
+
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        y: np.ndarray = x ** self.c
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = self.inputs[0].data
+        c: int = self.c
+        gy: np.ndarray = gys[0]
+        gx: np.ndarray = c * x ** (c - 1) * gy
+        return (gx,)
+
+def pow(x: Variable, c: int) -> Variable:
+    return Pow(c)(x)[0]
+
+
 
 
 def numerical_diff(f, x, eps = 1e-4):
@@ -73,94 +236,8 @@ def as_array(x):
         return np.array(x)
     return x
 
-
-
-# RUN
-if __name__ == "__main__":
-    x = Variable(np.array(10))
-    f = Function()
-    try:
-        f(x)
-    except NotImplementedError:
-        print("not implemented error")
-
-
-    x = Variable(np.array(10))
-    f = Square()
-    y = f(x)
-    print(type(y))
-    print(y.data)
-
-
-    A: Function = Square()
-    B: Function = Exp()
-    C: Function = Square()
-    x = Variable(np.array(0.5))
-    a = A(x)
-    b = B(a)
-    y = C(b)
-    print(y.data)
-
-    f = Square()
-    x = Variable(np.array(2.0))
-    dy = numerical_diff(f, x)
-    print(dy)
-
-    def ff(x):
-        A = Square()
-        B = Exp()
-        C = Square()
-        return C(B(A(x)))
-    x = Variable(np.array(0.5))
-    dy = numerical_diff(ff, x)
-    print(dy)
-
-    A = Square()
-    B = Exp()
-    C = Square()
-    x = Variable(np.array(0.5))
-    a = A(x)
-    b = B(a)
-    y = C(b)
-    y.grad = np.array(1.0)
-    b.grad = C.backward(y.grad)
-    a.grad = B.backward(b.grad)
-    x.grad = A.backward(a.grad)
-    print(x.grad)
-    assert y.creator == C
-    assert y.creator.input == b
-    assert y.creator.input.creator == B
-    assert y.creator.input.creator.input == a
-    assert y.creator.input.creator.input.creator == A
-    assert y.creator.input.creator.input.creator.input == x
-
-    y.grad = np.array(1.0)
-    C = y.creator
-    b = C.input
-    b.grad = C.backward(y.grad)
-    B = b.creator if b is not None and b.creator is not None else Function()
-    a = B.input
-    a.grad = B.backward(b.grad)
-    A = a.creator if a is not None and a.creator is not None else Function()
-    x = A.input
-    x.grad = A.backward(a.grad)
-    print(x.grad)
-
-    x.grad = np.array(0.0)
-    y.grad = np.array(1.0)
-    y.backward()
-    print(x.grad)
-
-    x = Variable(np.array(0.5))
-    a = square(x)
-    b = exp(a)
-    y = square(b)
-    y.grad = np.array(1.0)
-    y.backward()
-    print(x.grad)
-
-    x = Variable(np.array(0.5))
-    y = square(exp(square(x)))
-    y.backward()
-    print(x.grad)
+def as_variable(x: np.ndarray|Variable) -> Variable:
+    if isinstance(x, Variable):
+        return x
+    return Variable(x)
 
