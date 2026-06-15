@@ -1,6 +1,7 @@
 import contextlib
 
 class Config:
+    is_debug = False
     enable_backprop = True
 
 @contextlib.contextmanager

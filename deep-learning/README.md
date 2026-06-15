@@ -20,3 +20,7 @@
     # after env setup
     $ pip3 install -r dependencies.txt
 
+## Additional PKG
+
+    $ sudo apt install graphviz
+

@@ -1,9 +1,12 @@
 import inspect
 
+from .Config import Config
+
 class Log:
     @staticmethod
     def d(obj: object, msg: str):
-        Log.log("D", obj, msg)
+        if Config.is_debug:
+            Log.log("D", obj, msg)
 
     @staticmethod
     def e(obj: object, msg: str):

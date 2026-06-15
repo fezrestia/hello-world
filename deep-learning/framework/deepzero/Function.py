@@ -7,6 +7,7 @@ import weakref
 from .Variable import Variable
 from .Config import Config
 from .Type import Scalar, ScalarTypes
+from .Log import Log
 
 class Function:
     def __call__(self, *raw_inputs: Variable|np.ndarray) -> tuple[Variable, ...]:
@@ -29,7 +30,7 @@ class Function:
     def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
         raise NotImplementedError()
 
-    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
         raise NotImplementedError()
 
 
@@ -41,10 +42,10 @@ class Square(Function):
         return (y,)
 
     @override
-    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        gy: np.ndarray = gys[0]
-        x: np.ndarray = self.inputs[0].data  # square has only 1 input stored in tuple[Variable]
-        gx: np.ndarray = 2 * x * gy
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        gy: Variable = gys[0]
+        x: Variable = self.inputs[0]  # square has only 1 input stored in tuple[Variable]
+        gx: Variable = 2 * x * gy
         return (gx,)
 
 def square(x: Variable) -> Variable:
@@ -61,10 +62,10 @@ class Exp(Function):
         return (y,)
 
     @override
-    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = self.inputs[0].data  # exp has only 1 input stored in tuple[Variable]
-        gy: np.ndarray = gys[0]
-        gx: np.ndarray = np.exp(x) * gy
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        x: Variable = self.inputs[0]  # exp has only 1 input stored in tuple[Variable]
+        gy: Variable = gys[0]
+        gx: Variable = exp(x) * gy
         return (gx,)
 
 def exp(x: Variable) -> Variable:
@@ -82,8 +83,8 @@ class Add(Function):
         return (y,)
 
     @override
-    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        gy: np.ndarray = gys[0]
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        gy: Variable = gys[0]
         return (gy, gy)
 
 def add(x0: Variable, x1: Variable|np.ndarray|Scalar) -> Variable:
@@ -104,12 +105,12 @@ class Mul(Function):
         return (y,)
 
     @override
-    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x0: np.ndarray = self.inputs[0].data
-        x1: np.ndarray = self.inputs[1].data
-        gy: np.ndarray = gys[0]
-        gx0: np.ndarray = gy * x1
-        gx1: np.ndarray = gy * x0
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        x0: Variable = self.inputs[0]
+        x1: Variable = self.inputs[1]
+        gy: Variable = gys[0]
+        gx0: Variable = gy * x1
+        gx1: Variable = gy * x0
         return (gx0, gx1)
 
 def mul(x0: Variable, x1: Variable|np.ndarray|Scalar) -> Variable:
@@ -128,8 +129,8 @@ class Neg(Function):
         return (-x,)
 
     @override
-    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        gy: np.ndarray = gys[0]
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        gy: Variable = gys[0]
         return (-gy,)
 
 def neg(x: Variable) -> Variable:
@@ -145,8 +146,8 @@ class Sub(Function):
         return (y,)
 
     @override
-    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        gy: np.ndarray = gys[0]
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        gy: Variable = gys[0]
         return (gy, -gy)
 
 def sub(x0: Variable|np.ndarray|Scalar, x1: Variable|np.ndarray|Scalar) -> Variable:
@@ -176,10 +177,10 @@ class Div(Function):
         return (y,)
 
     @override
-    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x0: np.ndarray = self.inputs[0].data
-        x1: np.ndarray = self.inputs[1].data
-        gy: np.ndarray = gys[0]
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        x0: Variable = self.inputs[0]
+        x1: Variable = self.inputs[1]
+        gy: Variable = gys[0]
         gx0 = gy / x1
         gx1 = gy * (-x0 / x1 ** 2)
         return (gx0, gx1)
@@ -213,16 +214,73 @@ class Pow(Function):
         return (y,)
 
     @override
-    def backward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = self.inputs[0].data
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        x: Variable = self.inputs[0]
         c: int = self.c
-        gy: np.ndarray = gys[0]
-        gx: np.ndarray = c * x ** (c - 1) * gy
+        gy: Variable = gys[0]
+        gx: Variable = c * x ** (c - 1) * gy
         return (gx,)
 
 def pow(x: Variable, c: int) -> Variable:
     return Pow(c)(x)[0]
 
+
+class Sin(Function):
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        y: np.ndarray = np.sin(x)
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        x: Variable = self.inputs[0]
+        gy: Variable = gys[0]
+        gx: Variable = gy * cos(x)
+        return (gx,)
+
+def sin(x: Variable) -> Variable:
+    return Sin()(x)[0]
+
+
+class Cos(Function):
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        y: np.ndarray = np.cos(x)
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        x: Variable = self.inputs[0]
+        gy: Variable = gys[0]
+        gx: Variable = -gy * sin(x)
+        return (gx,)
+
+def cos(x: Variable) -> Variable:
+    return Cos()(x)[0]
+
+
+class Tanh(Function):
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        y = np.tanh(x)
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        y: Variable|None = self.outputs[0]()  # weak ref
+        if y is not None:
+            gy: Variable = gys[0]
+            gx: Variable = gy * (1.0 - y * y)
+            return (gx,)
+        else:
+            Log.e(self, "y is None")
+            assert y is not None
+
+def tanh(x: Variable) -> Variable:
+    return Tanh()(x)[0]
 
 
 

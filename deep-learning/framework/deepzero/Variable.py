@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 from .Log import Log
 from .Type import Scalar
+from .Config import use_config
 
 class Variable:
     __array_priority__ = 100  # has priority to numpy.ndarray add/mul
@@ -20,7 +21,7 @@ class Variable:
                 raise TypeError(f"{type(data)} is not supported.")
 
         self.data: np.ndarray = data
-        self.grad: np.ndarray|None = None
+        self.grad: Variable|None = None
 
         self.creator: Function|None = None
         self.generation: int = 0
@@ -54,13 +55,45 @@ class Variable:
         return f"Variable({p}), dtype:{self.dtype}, shape:{self.shape}"
 
 
+    # for mypy
+    def __add__(self: Variable, other: object):
+        pass
+    # for mypy
+    def __radd__(self: Variable, other: object):
+        pass
+    # for mypy
+    def __mul__(self: Variable, other: object):
+        pass
+    # for mypy
+    def __rmul__(self: Variable, other: object):
+        pass
+    # for mypy
+    def __sub__(self: Variable, other: object):
+        pass
+    # for mypy
+    def __rsub__(self: Variable, other: object):
+        pass
+    # for mypy
+    def __truediv__(self: Variable, other: object):
+        pass
+    # for mypy
+    def __rtruediv__(self: Variable, other: object):
+        pass
+    # for mypy
+    def __neg__(self: Variable):
+        pass
+    # for mypy
+    def __pow__(self: Variable, c: int):
+        pass
+
+
     def set_creator(self, func: Function):
         self.creator = func
         self.generation = func.generation + 1
 
-    def backward(self, keep_grad = False) -> None:
+    def backward(self, keep_grad = False, create_graph = False) -> None:
         if self.grad is None:
-            self.grad = np.ones_like(self.data)
+            self.grad = Variable(np.ones_like(self.data))
 
         func_queue: list[Function] = []
         func_set: set[Function] = set()
@@ -77,25 +110,27 @@ class Variable:
         while func_queue:
             f: Function = func_queue.pop()  # get and remove last element (last generation)
 
-            gys: list[np.ndarray] = []
+            gys: list[Variable] = []
             for o_ref in f.outputs:
                 o: Variable|None = o_ref()
                 if o is not None and o.grad is not None:
                     gys.append(o.grad)
                 else:
                     Log.e(self, "output.grad is None.")
-            gxs: tuple[np.ndarray, ...] = f.backward(tuple(gys))
 
-            for x, gx in zip(f.inputs, gxs):
-                if x.grad is None:
-                    x.grad = gx
-                else:
-                    x.grad = x.grad + gx  # cut reference from other Variant.grad
+            with use_config("enable_backprop", create_graph):
+                gxs: tuple[Variable, ...] = f.backward(tuple(gys))
 
-                if x.creator is not None:
-                    add_func(x.creator)
-                else:
-                    Log.d(self, "x.creator is None, maybe root param.")
+                for x, gx in zip(f.inputs, gxs):
+                    if x.grad is None:
+                        x.grad = gx
+                    else:
+                        x.grad = x.grad + gx  # cut reference from other Variant.grad
+
+                    if x.creator is not None:
+                        add_func(x.creator)
+                    else:
+                        Log.d(self, "x.creator is None, maybe root param.")
 
             # only root input grads can survive.
             if not keep_grad:

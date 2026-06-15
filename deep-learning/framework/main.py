@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from typing import override
 import numpy as np
+import math
+import matplotlib.pyplot as plt
 
 if "__file__" in globals():
     sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -12,6 +14,8 @@ if "__file__" in globals():
 from deepzero import Variable
 from deepzero import Function
 from deepzero import use_config, no_grad
+from deepzero import Visualize
+from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, sin, cos, tanh
 
 
 
@@ -230,31 +234,178 @@ from deepzero import use_config, no_grad
 #y = (x + 1) + x + (1 - x) - x + (2 * x) + (x * 2) + (1 / x) + (x / 1) + x ** 2
 #print(f"y = {y}")
 
-def sphere(x, y):
-    z = x ** 2 + y ** 2
-    return z
-x = Variable(np.array(1.0))
-y = Variable(np.array(1.0))
-z = sphere(x, y)
-z.backward()
-print(f"x.grad={x.grad}, y.grad={y.grad}")
+#def sphere(x, y):
+#    z = x ** 2 + y ** 2
+#    return z
+#x = Variable(np.array(1.0))
+#y = Variable(np.array(1.0))
+#z = sphere(x, y)
+#z.backward()
+#print(f"x.grad={x.grad}, y.grad={y.grad}")
 
-def matyas(x, y):
-    z = 0.26 * (x ** 2 + y ** 2) - 0.48 * x * y
-    return z
-x = Variable(np.array(1.0))
-y = Variable(np.array(1.0))
-z = matyas(x, y)
-z.backward()
-print(f"x.grad={x.grad}, y.grad={y.grad}")
+#def matyas(x, y):
+#    z = 0.26 * (x ** 2 + y ** 2) - 0.48 * x * y
+#    return z
+#x = Variable(np.array(1.0))
+#y = Variable(np.array(1.0))
+#z = matyas(x, y)
+#z.backward()
+#print(f"x.grad={x.grad}, y.grad={y.grad}")
 
-def goldstein(x, y):
-    z = (1 + (x + y + 1) ** 2 * (19 - 14 * x + 3 * x ** 2 - 14 * y + 6 * x * y + 3 * y ** 2)) \
-            * (30 + (2 * x - 3 * y) ** 2 * (18 - 32 * x + 12 * x ** 2 + 48 * y - 36 * x * y + 27 * y ** 2))
-    return z
+#def goldstein(x, y):
+#    z = (1 + (x + y + 1) ** 2 * (19 - 14 * x + 3 * x ** 2 - 14 * y + 6 * x * y + 3 * y ** 2)) \
+#            * (30 + (2 * x - 3 * y) ** 2 * (18 - 32 * x + 12 * x ** 2 + 48 * y - 36 * x * y + 27 * y ** 2))
+#    return z
+#x = Variable(np.array(1.0))
+#y = Variable(np.array(1.0))
+#z = goldstein(x, y)
+#z.backward()
+#print(f"x.grad={x.grad}, y.grad={y.grad}")
+#x.name = "x"
+#y.name = "y"
+#z.name = "z"
+#Visualize.plot_dot_graph(z, verbose = False, to_file = "~/.deepzero/goldstein_graph.png")
+
+#x = Variable(np.random.randn(2, 3))
+#x.name = "x"
+#print(Visualize._dot_var(x))
+#print(Visualize._dot_var(x, verbose = True))
+#x0 = Variable(np.array(1.0))
+#x0.name = "x0"
+#x1 = Variable(np.array(1.0))
+#x1.name = "x1"
+#y = x0 + x1
+#y.name = "y"
+#txt = Visualize._dot_func(y.creator)
+#print(txt)
+#txt = Visualize.get_dot_graph(y, verbose = True)
+#print(txt)
+#txt = Visualize.plot_dot_graph(y, verbose = False, to_file = "~/.deepzero/graph.png")
+#print(txt)
+
+#x = Variable(np.array(np.pi / 4))
+#y = sin(x)
+#y.backward()
+#print(y.data)
+#print(x.grad)
+
+#def my_sin(x, threshold = 1e-150):
+#    y = 0
+#    for i in range(100000):
+#        c = (-1) ** i / math.factorial(2 * i + 1)
+#        t = c * x ** (2 * i + 1)
+#        y = y + t
+#        if abs(t.data) < threshold:
+#            break
+#    return y
+#x = Variable(np.array(np.pi / 4))
+#y = my_sin(x)
+#y.backward()
+#print(y.data)
+#print(x.grad)
+#Visualize.plot_dot_graph(y, verbose = False, to_file = "~/.deepzero/graph.png")
+
+#def rosenbrock(x0, x1):
+#    y = 100 * (x1 - x0 ** 2) ** 2 + (x0 - 1) ** 2
+#    return y
+#x0 = Variable(np.array(0.0))
+#x1 = Variable(np.array(2.0))
+#y = rosenbrock(x0, x1)
+#y.backward()
+#print(x0.grad, x1.grad)
+#lr = 0.001
+#iters = 1000
+#for i in range(iters):
+#    print(x0, x1)
+#    y = rosenbrock(x0, x1)
+#    x0.clear_grad()
+#    x1.clear_grad()
+#    y.backward()
+#    x0.data -= lr * x0.grad
+#    x1.data -= lr * x1.grad
+
+#def f(x):
+#    y = x ** 4 - 2 * x ** 2
+#    return y
+#def d2f(x):
+#    return 12 * x ** 2 - 4
+#x = Variable(np.array(2.0))
+#iters = 10
+#for i in range(iters):
+#    print(i, x)
+#    y = f(x)
+#    x.clear_grad()
+#    y.backward()
+#    if x.grad is not None:
+#        x.data -= x.grad.data / d2f(x.data)
+
+#def f(x):
+#    y = x ** 4 - 2 * x ** 2
+#    return y
+#x = Variable(np.array(2.0))
+#y = f(x)
+#y.backward(create_graph = True)
+#print(x.grad)
+#gx = x.grad
+#x.clear_grad()
+#gx.backward()
+#print(x.grad)
+
+#def f(x):
+#    y = x ** 4 - 2 * x ** 2
+#    return y
+#x = Variable(np.array(2.0))
+#iters = 10
+#for i in range(iters):
+#    print(i, x)
+#    y = f(x)
+#    x.clear_grad()
+#    y.backward(create_graph = True)
+#    gx = x.grad
+#    x.clear_grad()
+#    if gx is not None:
+#        gx.backward()
+#    gx2 = x.grad
+#    if gx is not None and gx2 is not None:
+#        x.data -= gx.data / gx2.data
+
+#x = Variable(np.array(1.0))
+#y = sin(x)
+#y.backward(create_graph = True)
+#for i in range(3):
+#    gx = x.grad
+#    x.clear_grad()
+#    gx.backward(create_graph = True)
+#    print(x.grad)
+
+#x = Variable(np.linspace(-7, 7, 200))
+#y = sin(x)
+#y.backward(create_graph = True)
+#logs = [y.data.flatten()]
+#for i in range(3):
+#    logs.append(x.grad.data.flatten())
+#    gx = x.grad
+#    x.clear_grad()
+#    gx.backward(create_graph = True)
+#labels = ["y=sin(x)", "y'", "y''", "y'''"]
+#for i, v in enumerate(logs):
+#    plt.plot(x.data, logs[i], label=labels[i])
+#plt.legend(loc="lower right")
+#plt.show()
+
 x = Variable(np.array(1.0))
-y = Variable(np.array(1.0))
-z = goldstein(x, y)
-z.backward()
-print(f"x.grad={x.grad}, y.grad={y.grad}")
+y = tanh(x)
+x.name = "x"
+y.name = "y"
+y.backward(create_graph = True)
+iters = 8
+for i in range(iters):
+    gx = x.grad
+    x.clear_grad()
+    gx.backward(create_graph = True)
+gx = x.grad
+gx.name = "gx" + str(iters + 1)
+Visualize.plot_dot_graph(gx, verbose = False, to_file = "~/.deepzero/tanh.png")
+
+
 
