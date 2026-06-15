@@ -8,9 +8,9 @@ import numpy as np
 same_dir = str(Path(__file__).resolve().parent)
 sys.path.insert(0, same_dir)
 
-from Variable import Variable
-from Function import square
-from Function import numerical_diff
+from ..Variable import Variable
+from ..Function import square
+from ..Function import numerical_diff
 
 class SquareTest(unittest.TestCase):
     def test_forward(self):

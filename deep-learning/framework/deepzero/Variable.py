@@ -5,15 +5,11 @@ from pathlib import Path
 import numpy as np
 from typing import TYPE_CHECKING
 
-# include same dir layer.
-same_dir = str(Path(__file__).resolve().parent)
-sys.path.insert(0, same_dir)
-
 if TYPE_CHECKING:
-    from Function import Function
+    from .Function import Function
 
-from Log import Log
-from Type import Scalar
+from .Log import Log
+from .Type import Scalar
 
 class Variable:
     __array_priority__ = 100  # has priority to numpy.ndarray add/mul
@@ -56,44 +52,6 @@ class Variable:
 
         p = str(self.data).replace(f"\n", f"\n         ")
         return f"Variable({p}), dtype:{self.dtype}, shape:{self.shape}"
-
-    def __mul__(self, other: Variable|np.ndarray|Scalar) -> Variable:
-        from Function import mul
-        return mul(self, other)
-
-    def __rmul__(self, other: Variable|np.ndarray|Scalar) -> Variable:
-        return self.__mul__(other)
-
-    def __add__(self, other: Variable|np.ndarray|Scalar) -> Variable:
-        from Function import add
-        return add(self, other)
-
-    def __radd__(self, other: Variable|np.ndarray|Scalar) -> Variable:
-        return self.__add__(other)
-
-    def __neg__(self) -> Variable:
-        from Function import neg
-        return neg(self)
-
-    def __sub__(self, other: Variable|np.ndarray|Scalar) -> Variable:
-        from Function import sub
-        return sub(self, other)
-
-    def __rsub__(self, other: Variable|np.ndarray|Scalar) -> Variable:
-        from Function import sub
-        return sub(other, self)
-
-    def __truediv__(self, other: Variable|np.ndarray|Scalar) -> Variable:
-        from Function import div
-        return div(self, other)
-
-    def __rtruediv__(self, other: Variable|np.ndarray|Scalar) -> Variable:
-        from Function import div
-        return div(other, self)
-
-    def __pow__(self, c: int) -> Variable:
-        from Function import pow
-        return pow(self, c)
 
 
     def set_creator(self, func: Function):

@@ -4,13 +4,9 @@ from typing import override
 import numpy as np
 import weakref
 
-# include same dir layer.
-same_dir = str(Path(__file__).resolve().parent)
-sys.path.insert(0, same_dir)
-
-from Variable import Variable
-from Config import Config
-from Type import Scalar, ScalarTypes
+from .Variable import Variable
+from .Config import Config
+from .Type import Scalar, ScalarTypes
 
 class Function:
     def __call__(self, *raw_inputs: Variable|np.ndarray) -> tuple[Variable, ...]:
@@ -167,6 +163,9 @@ def sub(x0: Variable|np.ndarray|Scalar, x1: Variable|np.ndarray|Scalar) -> Varia
             y, = Sub()(x0, x1)
     return y
 
+def rsub(x0: Variable|np.ndarray|Scalar, x1: Variable|np.ndarray|Scalar) -> Variable:
+    return sub(x1, x0)
+
 
 class Div(Function):
     @override
@@ -198,6 +197,9 @@ def div(x0: Variable|np.ndarray|Scalar, x1: Variable|np.ndarray|Scalar) -> Varia
         else:
             y, = Div()(x0, x1)
     return y
+
+def rdiv(x0: Variable|np.ndarray|Scalar, x1: Variable|np.ndarray|Scalar) -> Variable:
+    return div(x1, x0)
 
 
 class Pow(Function):

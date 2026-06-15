@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 from pathlib import Path
 from typing import override
 import numpy as np
 
-# include same dir layer.
-same_dir = str(Path(__file__).resolve().parent)
-sys.path.insert(0, same_dir)
+if "__file__" in globals():
+    sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from Variable import Variable
-from Function import Function
-from Config import Config
-from Config import use_config, no_grad
+from deepzero import Variable
+from deepzero import Function
+from deepzero import use_config, no_grad
 
 
 
@@ -213,17 +212,49 @@ from Config import use_config, no_grad
 #print(1.0 + x)
 #print(2.0 * x)
 
-x = Variable(np.array(2.0))
-y = -x
-print(y)
-y1 = 2.0 - x
-y2 = x - 2.0
-print(y1)
-print(y2)
-d1 = 2.0 / x
-d2 = x / 2.0
-print(d1)
-print(d2)
-p = x ** 3
-print(p)
+#x = Variable(np.array(2.0))
+#y = -x
+#print(y)
+#y1 = 2.0 - x
+#y2 = x - 2.0
+#print(y1)
+#print(y2)
+#d1 = 2.0 / x
+#d2 = x / 2.0
+#print(d1)
+#print(d2)
+#p = x ** 3
+#print(p)
+
+#x = Variable(np.array(1.0))
+#y = (x + 1) + x + (1 - x) - x + (2 * x) + (x * 2) + (1 / x) + (x / 1) + x ** 2
+#print(f"y = {y}")
+
+def sphere(x, y):
+    z = x ** 2 + y ** 2
+    return z
+x = Variable(np.array(1.0))
+y = Variable(np.array(1.0))
+z = sphere(x, y)
+z.backward()
+print(f"x.grad={x.grad}, y.grad={y.grad}")
+
+def matyas(x, y):
+    z = 0.26 * (x ** 2 + y ** 2) - 0.48 * x * y
+    return z
+x = Variable(np.array(1.0))
+y = Variable(np.array(1.0))
+z = matyas(x, y)
+z.backward()
+print(f"x.grad={x.grad}, y.grad={y.grad}")
+
+def goldstein(x, y):
+    z = (1 + (x + y + 1) ** 2 * (19 - 14 * x + 3 * x ** 2 - 14 * y + 6 * x * y + 3 * y ** 2)) \
+            * (30 + (2 * x - 3 * y) ** 2 * (18 - 32 * x + 12 * x ** 2 + 48 * y - 36 * x * y + 27 * y ** 2))
+    return z
+x = Variable(np.array(1.0))
+y = Variable(np.array(1.0))
+z = goldstein(x, y)
+z.backward()
+print(f"x.grad={x.grad}, y.grad={y.grad}")
 
