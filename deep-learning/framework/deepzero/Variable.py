@@ -142,3 +142,20 @@ class Variable:
     def clear_grad(self):
         self.grad = None
 
+
+    def reshape(self, target_shape: tuple[int, ...]) -> Variable:
+        from .Function import reshape
+        return reshape(self, target_shape)
+
+    def transpose(self, axes: tuple[int, ...]|None = None) -> Variable:
+        from .Function import transpose
+        return transpose(self, axes)
+
+    @property
+    def T(self) -> Variable:
+        return self.transpose()
+
+    def sum(self, axis: int|tuple[int, ...]|None = None, keepdims: bool = False):
+        from .Function import sum
+        return sum(self, axis, keepdims)
+

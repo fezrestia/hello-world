@@ -12,10 +12,14 @@ if "__file__" in globals():
     sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from deepzero import Variable
+from deepzero import Parameter
 from deepzero import Function
 from deepzero import use_config, no_grad
 from deepzero import Visualize
-from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, sin, cos, tanh
+from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, sin, cos, tanh, sum, reshape, transpose, matmul, linear, sigmoid, mean_squared_error
+from deepzero import Layer
+from deepzero.Layer import Linear
+from deepzero import Model
 
 
 
@@ -393,19 +397,268 @@ from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, sin, cos
 #plt.legend(loc="lower right")
 #plt.show()
 
-x = Variable(np.array(1.0))
-y = tanh(x)
-x.name = "x"
-y.name = "y"
-y.backward(create_graph = True)
-iters = 8
-for i in range(iters):
-    gx = x.grad
-    x.clear_grad()
-    gx.backward(create_graph = True)
-gx = x.grad
-gx.name = "gx" + str(iters + 1)
-Visualize.plot_dot_graph(gx, verbose = False, to_file = "~/.deepzero/tanh.png")
+#x = Variable(np.array(1.0))
+#y = tanh(x)
+#x.name = "x"
+#y.name = "y"
+#y.backward(create_graph = True)
+#iters = 8
+#for i in range(iters):
+#    gx = x.grad
+#    x.clear_grad()
+#    gx.backward(create_graph = True)
+#gx = x.grad
+#gx.name = "gx" + str(iters + 1)
+#Visualize.plot_dot_graph(gx, verbose = False, to_file = "~/.deepzero/tanh.png")
 
+#x = Variable(np.array([[1,2,3],[4,5,6]]))
+#y = sin(x)
+#print(y)
+#c = Variable(np.array([[10,20,30],[40,50,60]]))
+#t = x + c
+#y = sum(t)
+#print(y)
+#y.backward(keep_grad = True)
+#print(y.grad)
+#print(t.grad)
+#print(x.grad)
+#print(c.grad)
 
+#x = Variable(np.array([[1,2,3],[4,5,6]]))
+#y = x.reshape((3,2))
+#print(y)
+#y = transpose(x)
+#print(y)
+#y.backward(keep_grad = True)
+#print(x.grad)
+#print(y.grad)
+#x = Variable(np.random.rand(2,3))
+#y1 = x.transpose()
+#y2 = x.T
+#print(y1)
+#print(y2)
+
+#x = Variable(np.array([[[1,11],[2,22],[3,33]],[[4,44],[5,55],[6,66]],[[7,77],[8,88],[9,99]]]))
+#y = x.T
+#print(y)
+#yy = x.transpose((0,2,1))
+#print(yy)
+
+#x = Variable(np.array([[1,2,3],[4,5,6]]))
+#y = sum(x)
+#y.backward()
+#print(y)
+#print(x.grad)
+
+#x = Variable(np.array([[1,2,3],[4,5,6]]))
+#y = sum(x, axis = 0)
+#y.backward()
+#print(y)
+#print(x.grad)
+#x = Variable(np.random.randn(2,3,4,5))
+#y = x.sum(keepdims = True)
+#print(y.shape)
+
+#x0 = Variable(np.array([1,2,3]))
+#x1 = Variable(np.array([10]))
+#y = x0 + x1
+#print(y)
+
+#x0 = Variable(np.array([1,2,3]))
+#x1 = Variable(np.array([10]))
+#y = x0 + x1
+#print(y)
+#y.backward()
+#print(x1)
+#print(x1.grad)
+
+#x = Variable(np.random.randn(2, 3))
+#W = Variable(np.random.randn(3, 4))
+#y = matmul(x, W)
+#y.backward()
+#print(f"y.shape={y.shape}")
+#print(f"x.shape={x.shape}, x.grad.shape={x.grad.shape}")
+#print(f"W.shape={W.shape}, W.grad.shape={W.grad.shape}")
+
+#np.random.seed(0)
+#x = np.random.rand(100, 1)  # (100,1)
+#y = 5 + 2 * x + np.random.rand(100, 1)  # (100,1)
+#plt.scatter(x, y, s = 10)
+#plt.xlabel("x")
+#plt.ylabel("y")
+##plt.show()
+#x = Variable(x)
+#y = Variable(y)
+#W = Variable(np.zeros((1,1)))
+#b = Variable(np.zeros(1))
+#def predict(x):
+#    y = matmul(x, W) + b
+#    return y
+#def mean_squared_error(x0, x1):
+#    diff = x0 - x1
+#    return sum(diff ** 2) / len(diff)
+#lr = 0.1
+#iter = 100
+#for i in range(iter):
+#    y_pred = predict(x)
+#    loss = mean_squared_error(y, y_pred)
+#    W.clear_grad()
+#    b.clear_grad()
+#    loss.backward()
+#    W.data -= lr * W.grad.data
+#    b.data -= lr * b.grad.data
+#    print(W, b, loss)
+#plt.plot(x.data, y_pred.data, color = "r")
+#plt.show()
+
+#x = Variable(np.random.randn(2, 3))
+#W = Variable(np.random.randn(3, 4))
+#b = Variable(np.zeros(1))
+#y = linear(x, W, b)
+#y.backward()
+#print(x.grad)
+
+#np.random.seed(0)
+#x = np.random.rand(100, 1)
+#y = np.sin(2 * np.pi * x) + np.random.rand(100, 1)
+#plt.scatter(x, y, s=10)
+#plt.xlabel("x")
+#plt.ylabel("y")
+#I, H, O = 1, 10, 1
+#W1 = Variable(0.01 * np.random.randn(I, H))
+#b1 = Variable(np.zeros(H))
+#W2 = Variable(0.01 * np.random.randn(H, O))
+#b2 = Variable(np.zeros(O))
+#def predict(x):
+#    y = linear(x, W1, b1)
+#    y = sigmoid(y)
+#    y = linear(y, W2, b2)
+#    return y
+#lr = 0.2
+#iters = 10000
+#for i in range(iters):
+#    y_pred = predict(x)
+#    loss = mean_squared_error(y, y_pred)
+#    W1.clear_grad()
+#    b1.clear_grad()
+#    W2.clear_grad()
+#    b2.clear_grad()
+#    loss.backward()
+#    W1.data -= lr * W1.grad.data
+#    b1.data -= lr * b1.grad.data
+#    W2.data -= lr * W2.grad.data
+#    b2.data -= lr * b2.grad.data
+#    if i % 1000 == 0:
+#        print(loss)
+#print(f"W1.shape={W1.shape}")
+#print(W1)
+#print(f"b1.shape={b1.shape}")
+#print(b1)
+#print(f"W2.shape={W2.shape}")
+#print(W2)
+#print(f"b2.shape={b2.shape}")
+#print(b2)
+#t = np.arange(0, 1, .01)[:, np.newaxis]
+#y_pred = predict(t)
+#plt.plot(t, y_pred.data, color = "r")
+#plt.show()
+
+#x = Variable(np.array(1.0))
+#p = Parameter(np.array(1.0))
+#y = x + p
+#print(isinstance(p, Parameter))
+#print(isinstance(x, Parameter))
+#print(isinstance(y, Parameter))
+
+#np.random.seed(0)
+#x = np.random.rand(100, 1)
+#y = np.sin(2 * np.pi * x) + np.random.rand(100, 1)
+#l1 = Linear(10)
+#l2 = Linear(1)
+#def predict(x):
+#    (y,) = l1(x)
+#    y = sigmoid(y)
+#    (y,) = l2(y)
+#    return y
+#lr = 0.2
+#iters = 10000
+#for i in range(iters):
+#    y_pred = predict(x)
+#    loss = mean_squared_error(Variable(y), y_pred)
+#    l1.clear_grads()
+#    l2.clear_grads()
+#    loss.backward()
+#    for l in [l1, l2]:
+#        for p in l.params():
+#            p.data -= lr * p.grad.data
+#    if i % 1000 == 0:
+#        print(loss)
+
+#np.random.seed(0)
+#x = np.random.rand(100, 1)
+#y = np.sin(2 * np.pi * x) + np.random.rand(100, 1)
+#lr = 0.2
+#iters = 10000
+#model = Layer()
+#model.l1 = Linear(5)
+#model.l2 = Linear(3)
+#def predict(model, x):
+#    (y,) = model.l1(x)
+#    y = sigmoid(y)
+#    (y,) = model.l2(y)
+#    return y
+#for i in range(iters):
+#    y_pred = predict(model, x)
+#    loss = mean_squared_error(Variable(y), y_pred)
+#    model.clear_grads()
+#    loss.backward()
+#    for p in model.params():
+#        p.data -= lr * p.grad.data
+#    if i % 1000 == 0:
+#        print(loss)
+#for p in model.params():
+#    print(p)
+
+#class TwoLayerNet(Model):
+#    def __init__(self, hidden_size: int, out_size: int):
+#        super().__init__()
+#        self.l1 = Linear(hidden_size)
+#        self.l2 = Linear(out_size)
+#    @override
+#    def forward(self, *x: Variable) -> tuple[Variable, ...]:
+#        (y,) = self.l1(*x)
+#        y = sigmoid(y)
+#        (y,) = self.l2(y)
+#        return (y,)
+#x = Variable(np.random.randn(5, 10), name = "x")
+#model: Model = TwoLayerNet(100, 10)
+#model.plot(x, to_file = "~/.deepzero/model.png")
+
+np.random.seed(0)
+x = np.random.rand(100, 1)
+y = np.sin(2 * np.pi * x) + np.random.rand(100, 1)
+lr = 0.2
+max_iters = 10000
+hidden_size = 10
+class TwoLayerNet(Model):
+    def __init__(self, hidden_size: int, out_size: int):
+        super().__init__()
+        self.l1 = Linear(hidden_size)
+        self.l2 = Linear(out_size)
+    @override
+    def forward(self, *x: Variable) -> tuple[Variable, ...]:
+        (y,) = self.l1(*x)
+        y = sigmoid(y)
+        (y,) = self.l2(y)
+        return (y,)
+model: Model = TwoLayerNet(hidden_size, 1)
+for i in range(max_iters):
+    (y_pred,) = model(Variable(x))
+    loss = mean_squared_error(Variable(y), y_pred)
+    model.clear_grads()
+    loss.backward()
+    for p in model.params():
+        p.data -= lr * p.grad.data
+    if i % 1000 == 0:
+        print(loss)
 

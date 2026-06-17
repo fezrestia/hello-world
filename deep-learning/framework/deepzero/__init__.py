@@ -1,6 +1,9 @@
 from deepzero.Variable import Variable
+from deepzero.Parameter import Parameter
 from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow
 from deepzero.Config import Config, use_config, no_grad
+from deepzero.Layer import Layer
+from deepzero.Model import Model
 
 Variable.__add__ = add  # type: ignore[operator, assignment]
 Variable.__radd__ = add  # type: ignore[attr-defined, assignment]
