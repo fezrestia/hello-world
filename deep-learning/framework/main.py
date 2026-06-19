@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# mypy: ignore-errors
+
 import os
 import sys
 from pathlib import Path
@@ -10,16 +12,23 @@ import matplotlib.pyplot as plt
 
 if "__file__" in globals():
     sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+    sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from deepzero import Variable
 from deepzero import Parameter
 from deepzero import Function
 from deepzero import use_config, no_grad
 from deepzero import Visualize
-from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, sin, cos, tanh, sum, reshape, transpose, matmul, linear, sigmoid, mean_squared_error
+from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, sin, cos, tanh, sum, reshape, transpose, matmul, linear, sigmoid, mean_squared_error, as_variable, get_item, softmax, softmax_cross_entropy, accuracy, relu
 from deepzero import Layer
 from deepzero.Layer import Linear
 from deepzero import Model
+from deepzero.Model import MultiLayerPerceptron
+from deepzero import Optimizer
+from deepzero.Optimizer import StochasticGradientDecent, MomentumSGD, Adam
+from deepzero import DataSet
+from deepzero.DataSet import Spiral, MNIST
+from deepzero import DataLoader
 
 
 
@@ -634,31 +643,256 @@ from deepzero import Model
 #model: Model = TwoLayerNet(100, 10)
 #model.plot(x, to_file = "~/.deepzero/model.png")
 
-np.random.seed(0)
-x = np.random.rand(100, 1)
-y = np.sin(2 * np.pi * x) + np.random.rand(100, 1)
-lr = 0.2
-max_iters = 10000
-hidden_size = 10
-class TwoLayerNet(Model):
-    def __init__(self, hidden_size: int, out_size: int):
-        super().__init__()
-        self.l1 = Linear(hidden_size)
-        self.l2 = Linear(out_size)
-    @override
-    def forward(self, *x: Variable) -> tuple[Variable, ...]:
-        (y,) = self.l1(*x)
-        y = sigmoid(y)
-        (y,) = self.l2(y)
-        return (y,)
-model: Model = TwoLayerNet(hidden_size, 1)
-for i in range(max_iters):
-    (y_pred,) = model(Variable(x))
-    loss = mean_squared_error(Variable(y), y_pred)
-    model.clear_grads()
-    loss.backward()
-    for p in model.params():
-        p.data -= lr * p.grad.data
-    if i % 1000 == 0:
-        print(loss)
+#np.random.seed(0)
+#x = np.random.rand(100, 1)
+#y = np.sin(2 * np.pi * x) + np.random.rand(100, 1)
+#lr = 0.2
+#max_iters = 10000
+#hidden_size = 10
+#class TwoLayerNet(Model):
+#    def __init__(self, hidden_size: int, out_size: int):
+#        super().__init__()
+#        self.l1 = Linear(hidden_size)
+#        self.l2 = Linear(out_size)
+#    @override
+#    def forward(self, *x: Variable) -> tuple[Variable, ...]:
+#        (y,) = self.l1(*x)
+#        y = sigmoid(y)
+#        (y,) = self.l2(y)
+#        return (y,)
+#model: Model = TwoLayerNet(hidden_size, 1)
+#for i in range(max_iters):
+#    (y_pred,) = model(Variable(x))
+#    loss = mean_squared_error(Variable(y), y_pred)
+#    model.clear_grads()
+#    loss.backward()
+#    for p in model.params():
+#        p.data -= lr * p.grad.data
+#    if i % 1000 == 0:
+#        print(loss)
+
+#np.random.seed(0)
+#x = np.random.rand(100, 1)
+#y = np.sin(2 * np.pi * x) + np.random.rand(100, 1)
+#lr = 0.2
+#max_iters = 10000
+#hidden_size = 10
+#model: Model = MultiLayerPerceptron((hidden_size, 1))
+##optimizer: Optimizer = StochasticGradientDecent(lr).setup(model)
+#optimizer: Optimizer = MomentumSGD(lr).setup(model)
+#for i in range(max_iters):
+#    (y_pred,) = model(as_variable(x))
+#    loss = mean_squared_error(as_variable(y), y_pred)
+#    model.clear_grads()
+#    loss.backward()
+#    optimizer.update()
+#    if i % 1000 == 0:
+#        print(loss)
+
+#x = Variable(np.array([[1,2,3],[4,5,6]]))
+#indices = np.array([0, 0, 1])
+#y = get_item(x, indices)
+#print(y)
+#print(x[1])
+#print(x[:,2])
+
+#np.random.seed(0)
+#x = np.array([[0.2,-0.4],[0.3,0.5],[1.3,-3.2],[2.1,0.3]])
+#t = np.array([2,0,1,0])
+#model: Model = MultiLayerPerceptron((10, 3))
+#(y,) = model(x)
+#print(y)
+#loss = softmax_cross_entropy(y, Variable(t))
+#loss.backward()
+#print(loss)
+
+#N = 100
+#CLS_NUM = 3
+#x, t = spiral.load_train_data()
+#print(x.shape)
+#print(t.shape)
+#print(x[10], t[10])
+#print(x[110], t[110])
+## train
+#max_epoch = 300
+#batch_size = 30
+#hidden_size = 10
+#lr = 1.0
+#model = MultiLayerPerceptron((hidden_size, CLS_NUM))
+#optimizer = StochasticGradientDecent(lr).setup(model)
+#data_size = len(x)
+#max_iter = math.ceil(data_size / batch_size)
+#for epoch in range(max_epoch):
+#    index = np.random.permutation(data_size)
+#    sum_loss = 0.0
+#    for i in range(max_iter):
+#        batch_index = index[i * batch_size:(i + 1) * batch_size]
+#        batch_x = x[batch_index]
+#        batch_t = t[batch_index]
+#        (y,) = model(batch_x)
+#        loss = softmax_cross_entropy(y, batch_t)
+#        model.clear_grads()
+#        loss.backward()
+#        optimizer.update()
+#        sum_loss += float(loss.data) * len(batch_t)  # loss is average for N
+#    avg_loss = sum_loss / data_size
+#    print(f"epoch = {epoch + 1}, loss = {avg_loss}")
+## boundary plot
+#h = 0.001
+#x_min, x_max = x[:, 0].min() - 0.1, x[:, 0].max() + 0.1
+#y_min, y_max = x[:, 1].min() - 0.1, x[:, 1].max() + 0.1
+#xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+#X = np.c_[xx.ravel(), yy.ravel()]
+#with no_grad():
+#    (score,) = model(X)
+#predict_cls = np.argmax(score.data, axis = 1)
+#Z = predict_cls.reshape(xx.shape)
+#plt.contourf(xx, yy, Z)
+## point plot
+#markers = ["o", "x", "^"]
+#colors = ["orange", "blue", "green"]
+#for i in range(len(x)):
+#    c = t[i]
+#    plt.scatter(x[i][0], x[i][1], s = 40, marker = markers[c], c = colors[c])
+#plt.show()
+
+#train_set = Spiral(train = True)
+#print(train_set[0])
+#print(len(train_set))
+#batch_index = [0, 1, 2]
+#batch = [train_set[i] for i in batch_index]
+#x = np.array([sample[0] for sample in batch])
+#t = np.array([sample[1] for sample in batch])
+#print(x.shape)
+#print(t.shape)
+
+#max_epoch = 300
+#batch_size = 30
+#hidden_size = 10
+#lr = 1.0
+#train_data = Spiral(train = True)
+#model = MultiLayerPerceptron((hidden_size, 10))
+#optimizer = StochasticGradientDecent(lr).setup(model)
+#data_size = len(train_data)
+#max_iter = math.ceil(data_size / batch_size)
+#for epoch in range(max_epoch):
+#    index = np.random.permutation(data_size)
+#    sum_loss = 0.0
+#    for i in range(max_iter):
+#        batch_index = index[i * batch_size:(i + 1) * batch_size]
+#        batch = [train_data[i] for i in batch_index]
+#        batch_x = np.array([data[0] for data in batch])
+#        batch_t = np.array([data[1] for data in batch])
+#        (y,) = model(batch_x)
+#        loss = softmax_cross_entropy(y, batch_t)
+#        model.clear_grads()
+#        loss.backward()
+#        optimizer.update()
+#        sum_loss += float(loss.data) * len(batch_t)  # loss is average for N
+#    avg_loss = sum_loss / data_size
+#    print(f"epoch = {epoch + 1}, loss = {avg_loss}")
+
+#batch_size = 10
+#max_epoch = 1
+#train_set = Spiral(train = True)
+#test_set = Spiral(train = False)
+#train_loader = DataLoader(train_set, batch_size)
+#test_loader = DataLoader(test_set, batch_size, shuffle = False)
+#for epoch in range(max_epoch):
+#    for x, t in train_loader:
+#        print(x.shape, t.shape)
+#        break
+#    for x, t in test_loader:
+#        print(x.shape, t.shape)
+#        break
+
+#y = np.array([[0.2, 0.8, 0], [0.1, 0.9, 0], [0.8, 0.1, 0.1]])
+#t = np.array([1, 2, 0])
+#accuracy = accuracy(y, t)
+#print(accuracy)
+
+#max_epoch = 300
+#batch_size = 30
+#hidden_size = 10
+#lr = 1.0
+#train_set = Spiral(train = True)
+#test_set = Spiral(train = False)
+#train_loader = DataLoader(train_set, batch_size)
+#test_loader = DataLoader(test_set, batch_size, shuffle = False)
+#model = MultiLayerPerceptron((hidden_size, 10))
+#optimizer = StochasticGradientDecent(lr).setup(model)
+#for epoch in range(max_epoch):
+#    sum_loss = 0.0
+#    sum_acc = 0.0
+#    for x, t in train_loader:
+#        (y,) = model(x)
+#        loss = softmax_cross_entropy(y, t)
+#        acc = accuracy(y, t)
+#        model.clear_grads()
+#        loss.backward()
+#        optimizer.update()
+#        sum_loss += float(loss.data) * len(t)
+#        sum_acc += float(acc.data) * len(t)
+#    print(f"epoch = {epoch + 1}, loss = {sum_loss / len(train_set)}, accuracy = {sum_acc / len(train_set)}")
+#    sum_loss = 0.0
+#    sum_acc = 0.0
+#    with no_grad():
+#        for x, t in test_loader:
+#            (y,) = model(x)
+#            loss = softmax_cross_entropy(y, t)
+#            acc = accuracy(y, t)
+#            sum_loss += float(loss.data) * len(t)
+#            sum_acc += float(acc.data) * len(t)
+#    print(f"test loss = {sum_loss / len(test_set)}, accuracy = {sum_acc / len(test_set)}")
+
+#train_set = MNIST(train = True, transform = None, target_transform = None)
+#test_set = MNIST(train = False, transform = None, target_transform = None)
+#print(len(train_set))
+#print(len(test_set))
+#x, t = train_set[0]
+#print(type(x), x.shape)
+#print(t)
+#train_set.show_samples()
+#test_set.show_samples()
+
+
+
+# MNIST learning
+def preproc(x: np.ndarray) -> np.ndarray:
+    x = x.flatten()
+    x = x.astype(np.float32)
+    x /= 255.0
+    return x
+train_set = MNIST(train = True, transform = preproc, target_transform = None)
+test_set = MNIST(train = False, transform = preproc, target_transform = None)
+max_epoch = 5
+batch_size = 100
+hidden_size = 1000
+train_loader = DataLoader(train_set, batch_size)
+test_loader = DataLoader(test_set, batch_size, shuffle = False)
+model = MultiLayerPerceptron((hidden_size, hidden_size, 10), activation = relu)
+optimizer = Adam().setup(model)
+for epoch in range(max_epoch):
+    sum_loss = 0.0
+    sum_acc = 0.0
+    for x, t in train_loader:
+        (y,) = model(x)
+        loss = softmax_cross_entropy(y, t)
+        acc = accuracy(y, t)
+        model.clear_grads()
+        loss.backward()
+        optimizer.update()
+        sum_loss += float(loss.data) * len(t)
+        sum_acc += float(acc.data) * len(t)
+    print(f"epoch = {epoch + 1}, loss = {sum_loss / len(train_set):.4f}, accuracy = {sum_acc / len(train_set):.4f}")
+    sum_loss = 0.0
+    sum_acc = 0.0
+    with no_grad():
+        for x, t in test_loader:
+            (y,) = model(x)
+            loss = softmax_cross_entropy(y, t)
+            acc = accuracy(y, t)
+            sum_loss += float(loss.data) * len(t)
+            sum_acc += float(acc.data) * len(t)
+    print(f"test loss = {sum_loss / len(test_set):.4f}, accuracy = {sum_acc / len(test_set):.4f}")
 

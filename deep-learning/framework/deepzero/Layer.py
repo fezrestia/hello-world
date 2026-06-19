@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from .Variable import Variable
 from .Parameter import Parameter
 from .Function import linear
-from .Log import Log
+from .Log import log_d, log_e
 
 class Layer:
     def __init__(self) -> None:
@@ -39,7 +39,7 @@ class Layer:
             elif isinstance(obj, Parameter):
                 yield obj
             else:
-                Log.e(self, "obj is NOT Parameter or Layer")
+                log_e(self, "obj is NOT Parameter or Layer")
                 assert isinstance(obj, (Layer, Parameter))
 
     def clear_grads(self):
@@ -69,7 +69,7 @@ class Linear(Layer):
         if self.in_size is not None:
             I:int = self.in_size
         else:
-            Log.e(self, "self.in_size is None")
+            log_e(self, "self.in_size is None")
             assert self.in_size is not None
         O: int = self.out_size
 

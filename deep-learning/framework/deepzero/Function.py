@@ -8,7 +8,7 @@ from weakref import ReferenceType
 from .Variable import Variable
 from .Config import Config
 from .Type import Scalar, ScalarTypes
-from .Log import Log
+from .Log import log_d, log_e
 
 class Function:
     def __call__(self, *raw_inputs: Variable|np.ndarray) -> tuple[Variable, ...]:
@@ -70,11 +70,29 @@ class Exp(Function):
             gx: Variable = gy * y
             return (gx,)
         else:
-            Log.e(self, "y is None")
+            log_e(self, "y is None")
             assert y is not None
 
 def exp(x: Variable) -> Variable:
     return Exp()(x)[0]
+
+
+class Log(Function):
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        y: np.ndarray = np.log(x)
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        gy: Variable = gys[0]
+        x: Variable = self.inputs[0]
+        gx: Variable = gy / x
+        return (gx,)
+
+def log(x: Variable) -> Variable:
+    return Log()(x)[0]
 
 
 class Add(Function):
@@ -299,7 +317,7 @@ class Tanh(Function):
             gx: Variable = gy * (1.0 - y * y)
             return (gx,)
         else:
-            Log.e(self, "y is None")
+            log_e(self, "y is None")
             assert y is not None
 
 def tanh(x: Variable) -> Variable:
@@ -523,9 +541,9 @@ class Linear(Function):
     def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
         x: np.ndarray = xs[0]
         W: np.ndarray = xs[1]
-        b: np.ndarray|None = xs[2]
         y: np.ndarray = x.dot(W)
-        if b is not None:
+        if len(xs) > 2:
+            b: np.ndarray = xs[2]
             y += b
         return (y,)
 
@@ -533,15 +551,18 @@ class Linear(Function):
     def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
         x: Variable = self.inputs[0]
         W: Variable = self.inputs[1]
-        b: Variable|None = self.inputs[2]
+
         gy: Variable = gys[0]
-        gb: Variable|None
-        if b is None or b.data is None:
-            gb = None
-        else:
-            gb = sum_to(gy, b.shape)
+
         gx: Variable = matmul(gy, W.T)
         gW: Variable = matmul(x.T, gy)
+
+        gb: Variable|None = None
+        if len(self.inputs) > 2:
+            b: Variable = self.inputs[2]
+            if b.data is not None:
+                gb = sum_to(gy, b.shape)
+
         if gb is not None:
             return (gx, gW, gb)
         else:
@@ -569,11 +590,156 @@ class Sigmoid(Function):
             gx: Variable = gy * y * (1 - y)
             return (gx,)
         else:
-            Log.e(self, "y is None")
+            log_e(self, "y is None")
             assert y is not None
 
 def sigmoid(x: Variable) -> Variable:
     return Sigmoid()(x)[0]
+
+
+class ReLU(Function):
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        y: np.ndarray = np.maximum(x, 0.0)
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        gy: Variable = gys[0]
+        x: Variable = self.inputs[0]
+        mask: np.ndarray = x.data > 0
+        gx: Variable = gy * mask
+        return (gx,)
+
+def relu(x: Variable) -> Variable:
+    return ReLU()(x)[0]
+
+
+class LeakyReLU(Function):
+    def __init__(self, slope: float) -> None:
+        self.slope: float = slope
+
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        y: np.ndarray = x.copy()
+        y[x <= 0] *= self.slope
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        gy: Variable = gys[0]
+        x: Variable = self.inputs[0]
+        mask: np.ndarray = (x.data > 0).astype(gy.dtype)
+        mask[mask <= 0] = self.slope
+        gx: Variable = gy * mask
+        return (gx,)
+
+def leaky_relu(x: Variable, slope: float = 0.2) -> Variable:
+    return LeakyReLU(slope)(x)[0]
+
+
+class Softmax(Function):
+    def __init__(self, axis: int = 1) -> None:
+        self.axis: int = axis
+
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        y: np.ndarray = x - x.max(axis = self.axis, keepdims = True)
+        y = np.exp(y)
+        y /= y.sum(axis = self.axis, keepdims = True)
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        gy: Variable = gys[0]
+        y: Variable|None = self.outputs[0]()  # weak ref
+        if y is not None:
+            gx: Variable = y * gy
+            sum_dx: Variable = gx.sum(axis = self.axis, keepdims = True)
+            gx -= y * sum_dx
+            return (gx,)
+        else:
+            log_e(self, "y is None")
+            assert y is not None
+
+def softmax(x: Variable, axis: int = 1) -> Variable:
+    return Softmax(axis)(x)[0]
+
+
+class SoftmaxCrossEntropy(Function):
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        t: np.ndarray = xs[1]
+        N: int = x.shape[0]
+        log_z: np.ndarray = logsumexp(x, axis = 1)
+        log_p: np.ndarray = x - log_z
+        log_p = log_p[np.arange(N), t.ravel()]
+        y: np.ndarray = -log_p.sum() / np.float32(N)  # average for N
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        x: Variable = self.inputs[0]
+        t: Variable = self.inputs[1]
+        N, CLS_NUM = x.shape
+
+        gy: Variable = gys[0]
+
+        gy *= 1.0 / N
+        y: Variable = softmax(x)
+        t_onehot: np.ndarray = np.eye(CLS_NUM, dtype = t.dtype)[t.data]
+        gx: Variable = (y - t_onehot) * gy
+        return (gx,)
+
+def softmax_cross_entropy(x: Variable, t: Variable) -> Variable:
+    return SoftmaxCrossEntropy()(x, t)[0]
+
+
+class GetItem(Function):
+    def __init__(self, slices: slice) -> None:
+        self.slices: slice = slices
+
+    @override
+    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        x: np.ndarray = xs[0]
+        y: np.ndarray = x[self.slices]
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        gy: Variable = gys[0]
+        x: Variable = self.inputs[0]
+        gx: Variable = get_item_grad(gy, self.slices, x.shape)
+        return (gx,)
+
+def get_item(x: Variable, slices: slice) -> Variable:
+    return GetItem(slices)(x)[0]
+
+
+class GetItemGrad(Function):
+    def __init__(self, slices: slice, original_shape: tuple[int, ...]) -> None:
+        self.slices: slice = slices
+        self.original_shape: tuple[int, ...] = original_shape
+
+    @override
+    def forward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        gy: np.ndarray = gys[0]
+        gx: np.ndarray = np.zeros(self.original_shape, dtype = gy.dtype)
+        np.add.at(gx, self.slices, gy)  # type: ignore[arg-type]
+        return (gx,)
+
+    @override
+    def backward(self, xs: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        x: Variable = xs[0]
+        y = get_item(x, self.slices)
+        return (y,)
+
+def get_item_grad(gy: Variable, slices: slice, original_shape: tuple[int, ...]) -> Variable:
+    return GetItemGrad(slices, original_shape)(gy)[0]
 
 
 
@@ -593,4 +759,40 @@ def as_variable(x: np.ndarray|Variable) -> Variable:
     if isinstance(x, Variable):
         return x
     return Variable(x)
+
+def logsumexp(x: np.ndarray, axis: int = 1) -> np.ndarray:
+    m: np.ndarray = x.max(axis = axis, keepdims = True)
+    y: np.ndarray = x - m
+    np.exp(y, out = y)  # over write
+    s: np.ndarray = y.sum(axis = axis, keepdims = True)
+    np.log(s, out = s)  # over write
+    m += s
+    return m
+
+def accuracy(actual: Variable, expect: Variable) -> Variable:
+    actual = as_variable(actual)
+    expect = as_variable(expect)
+
+    # expect:
+    #   [2, 1, 2, 3]
+    #
+    # actual:
+    #   [[0, 1, 2, 0],
+    #    [1, 2, 0, 1],
+    #    [3, 1, 0, 2],
+    #    [1, 0, 1, 2]]
+    # -> argmax axis 1
+    #   [[2],
+    #    [1],
+    #    [0],
+    #    [3]]
+    # -> reshape
+    #   [2, 1, 0, 3]
+    predict: np.ndarray = actual.data.argmax(axis = 1).reshape(expect.shape)
+
+    # result: [True, True, False, True] == [1, 1, 0, 1]
+    result: np.ndarray = (predict == expect.data)
+
+    accuracy: float = result.mean()
+    return Variable(as_array(accuracy))
 

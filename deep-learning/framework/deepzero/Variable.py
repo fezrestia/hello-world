@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .Function import Function
 
-from .Log import Log
+from .Log import log_d, log_e
 from .Type import Scalar
 from .Config import use_config
 
@@ -116,7 +116,7 @@ class Variable:
                 if o is not None and o.grad is not None:
                     gys.append(o.grad)
                 else:
-                    Log.e(self, "output.grad is None.")
+                    log_e(self, "output.grad is None.")
 
             with use_config("enable_backprop", create_graph):
                 gxs: tuple[Variable, ...] = f.backward(tuple(gys))
@@ -130,7 +130,7 @@ class Variable:
                     if x.creator is not None:
                         add_func(x.creator)
                     else:
-                        Log.d(self, "x.creator is None, maybe root param.")
+                        log_d(self, "x.creator is None, maybe root param.")
 
             # only root input grads can survive.
             if not keep_grad:

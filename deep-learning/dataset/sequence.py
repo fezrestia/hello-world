@@ -2,8 +2,8 @@ import os
 import numpy as np
 from pathlib import Path
 
-id_vs_char = {}
-char_vs_id = {}
+id_vs_char: dict[int, str] = {}
+char_vs_id: dict[str, int] = {}
 
 def _update_vocab(text):
     chars = list(text)

@@ -30,7 +30,7 @@ def gradient_check(
         print(f"# FAILED on gradient_check()")
         print(f"  Numerical Grad")
         print(f"    num_grad.shape = {num_grad.shape}")
-        print(f"    num_grad = {num_grad.flaten()[:10]}")
+        print(f"    num_grad = {num_grad.flatten()[:10]}")
         print(f"  BackProp Grad")
         print(f"    bp_grad.shape = {bp_grad.shape}")
         print(f"    bp_grad = {bp_grad.flatten()[:10]}")
