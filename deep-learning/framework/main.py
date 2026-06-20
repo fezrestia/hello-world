@@ -29,6 +29,7 @@ from deepzero.Optimizer import StochasticGradientDecent, MomentumSGD, Adam
 from deepzero import DataSet
 from deepzero.DataSet import Spiral, MNIST
 from deepzero import DataLoader
+from deepzero.cuda import gpu_enabled
 
 
 
@@ -872,10 +873,15 @@ train_loader = DataLoader(train_set, batch_size)
 test_loader = DataLoader(test_set, batch_size, shuffle = False)
 model = MultiLayerPerceptron((hidden_size, hidden_size, 10), activation = relu)
 optimizer = Adam().setup(model)
+if gpu_enabled:
+    train_loader.to_gpu()
+    test_loader.to_gpu()
+    model.to_gpu()
 for epoch in range(max_epoch):
     sum_loss = 0.0
     sum_acc = 0.0
     for x, t in train_loader:
+        #print(f"x.tpye = {type(x)}, t.type = {type(t)}")
         (y,) = model(x)
         loss = softmax_cross_entropy(y, t)
         acc = accuracy(y, t)
@@ -889,6 +895,7 @@ for epoch in range(max_epoch):
     sum_acc = 0.0
     with no_grad():
         for x, t in test_loader:
+            #print(f"x.tpye = {type(x)}, t.type = {type(t)}")
             (y,) = model(x)
             loss = softmax_cross_entropy(y, t)
             acc = accuracy(y, t)

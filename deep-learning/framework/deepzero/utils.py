@@ -53,13 +53,13 @@ def numerical_grad(
         tmp_val = x[idx].copy()
 
         x[idx] = tmp_val + eps
-        y1: np.ndarray|Variable = f(x, *args, **kwargs)  # f(x+h)
+        y1: np.ndarray|Variable = f(Variable(x), *args, **kwargs)  # f(x+h)
         if isinstance(y1, Variable):
             y1 = y1.data
         y1 = y1.copy()
 
         x[idx] = tmp_val - eps
-        y2: np.ndarray|Variable = f(x, *args, **kwargs)  # f(x-h)
+        y2: np.ndarray|Variable = f(Variable(x), *args, **kwargs)  # f(x-h)
         if isinstance(y2, Variable):
             y2 = y2.data
         y2 = y2.copy()

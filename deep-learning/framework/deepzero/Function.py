@@ -1,21 +1,24 @@
 import sys
 from pathlib import Path
 from typing import override
+from types import ModuleType
 import numpy as np
 import weakref
 from weakref import ReferenceType
+from collections.abc import Callable
 
 from .Variable import Variable
 from .Config import Config
-from .Type import Scalar, ScalarTypes
+from .Type import Scalar, ScalarTypes, Array, ArrayTypes
 from .Log import log_d, log_e
+from .cuda import npcp
 
 class Function:
-    def __call__(self, *raw_inputs: Variable|np.ndarray) -> tuple[Variable, ...]:
+    def __call__(self, *raw_inputs: Variable|Array) -> tuple[Variable, ...]:
         inputs: tuple[Variable, ...] = tuple([as_variable(x) for x in raw_inputs])
 
-        xs: tuple[np.ndarray, ...] = tuple([x.data for x in inputs])
-        ys: tuple[np.ndarray, ...] = self.forward(xs)
+        xs: tuple[Array, ...] = tuple([x.data for x in inputs])
+        ys: tuple[Array, ...] = self.forward(xs)
 
         outputs: tuple[Variable, ...] = tuple([Variable(as_array(y)) for y in ys])
 
@@ -28,7 +31,7 @@ class Function:
 
         return outputs
 
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
         raise NotImplementedError()
 
     def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
@@ -37,9 +40,9 @@ class Function:
 
 class Square(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y: np.ndarray = x ** 2
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        y: Array = x ** 2
         return (y,)
 
     @override
@@ -57,9 +60,11 @@ def square(x: Variable) -> Variable:
 
 class Exp(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y: np.ndarray = np.exp(x)
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        xp: ModuleType = npcp(x)
+
+        y: Array = xp.exp(x)
         return (y,)
 
     @override
@@ -79,9 +84,11 @@ def exp(x: Variable) -> Variable:
 
 class Log(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y: np.ndarray = np.log(x)
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        xp: ModuleType = npcp(x)
+
+        y: Array = xp.log(x)
         return (y,)
 
     @override
@@ -97,12 +104,14 @@ def log(x: Variable) -> Variable:
 
 class Add(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x0: np.ndarray = xs[0]
-        x1: np.ndarray = xs[1]
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x0: Array = xs[0]
+        x1: Array = xs[1]
+        xp: ModuleType = npcp(x0)
+
         self.x0_shape: tuple[int, ...] = x0.shape
         self.x1_shape: tuple[int, ...] = x1.shape
-        y: np.ndarray = x0 + x1
+        y: Array = x0 + x1
         return (y,)
 
     @override
@@ -115,10 +124,12 @@ class Add(Function):
             gx1 = sum_to(gx1, self.x1_shape)
         return (gx0, gx1)
 
-def add(x0: Variable, x1: Variable|np.ndarray|Scalar) -> Variable:
+def add(x0: Variable, x1: Variable|Array|Scalar) -> Variable:
+    xp: ModuleType = npcp(x0.data)
+
     y: Variable
     if isinstance(x1, ScalarTypes):
-        y, = Add()(x0, as_array(x1))
+        y, = Add()(x0, as_array(x1, xp))
     else:
         y, = Add()(x0, x1)
     return y
@@ -126,10 +137,11 @@ def add(x0: Variable, x1: Variable|np.ndarray|Scalar) -> Variable:
 
 class Mul(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x0: np.ndarray = xs[0]
-        x1: np.ndarray = xs[1]
-        y: np.ndarray = x0 * x1
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x0: Array = xs[0]
+        x1: Array = xs[1]
+
+        y: Array = x0 * x1
         return (y,)
 
     @override
@@ -144,10 +156,12 @@ class Mul(Function):
             gx1 = sum_to(gx1, x1.shape)
         return (gx0, gx1)
 
-def mul(x0: Variable, x1: Variable|np.ndarray|Scalar) -> Variable:
+def mul(x0: Variable, x1: Variable|Array|Scalar) -> Variable:
+    xp: ModuleType = npcp(x0.data)
+
     y: Variable
     if isinstance(x1, ScalarTypes):
-        y, = Mul()(x0, as_array(x1))
+        y, = Mul()(x0, as_array(x1, xp))
     else:
         y, = Mul()(x0, x1)
     return y
@@ -155,8 +169,8 @@ def mul(x0: Variable, x1: Variable|np.ndarray|Scalar) -> Variable:
 
 class Neg(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
         return (-x,)
 
     @override
@@ -170,12 +184,12 @@ def neg(x: Variable) -> Variable:
 
 class Sub(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x0: np.ndarray = xs[0]
-        x1: np.ndarray = xs[1]
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x0: Array = xs[0]
+        x1: Array = xs[1]
         self.x0_shape: tuple[int, ...] = x0.shape
         self.x1_shape: tuple[int, ...] = x1.shape
-        y: np.ndarray = x0 - x1
+        y: Array = x0 - x1
         return (y,)
 
     @override
@@ -188,30 +202,30 @@ class Sub(Function):
             gx1 = sum_to(gx1, self.x1_shape)
         return (gx0, gx1)
 
-def sub(x0: Variable|np.ndarray|Scalar, x1: Variable|np.ndarray|Scalar) -> Variable:
+def sub(x0: Variable|Array|Scalar, x1: Variable|Array|Scalar) -> Variable:
     y: Variable
     if isinstance(x0, ScalarTypes):
         if isinstance(x1, ScalarTypes):
             y, = Sub()(as_array(x0), as_array(x1))
         else:
-            y, = Sub()(as_array(x0), x1)
+            y, = Sub()(as_array(x0, npcp(x1)), x1)
     else:
         if isinstance(x1, ScalarTypes):
-            y, = Sub()(x0, as_array(x1))
+            y, = Sub()(x0, as_array(x1, npcp(x0)))
         else:
             y, = Sub()(x0, x1)
     return y
 
-def rsub(x0: Variable|np.ndarray|Scalar, x1: Variable|np.ndarray|Scalar) -> Variable:
+def rsub(x0: Variable|Array|Scalar, x1: Variable|Array|Scalar) -> Variable:
     return sub(x1, x0)
 
 
 class Div(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x0: np.ndarray = xs[0]
-        x1: np.ndarray = xs[1]
-        y: np.ndarray = x0 / x1
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x0: Array = xs[0]
+        x1: Array = xs[1]
+        y: Array = x0 / x1
         return (y,)
 
     @override
@@ -226,21 +240,21 @@ class Div(Function):
             gx1 = sum_to(gx1, x1.shape)
         return (gx0, gx1)
 
-def div(x0: Variable|np.ndarray|Scalar, x1: Variable|np.ndarray|Scalar) -> Variable:
+def div(x0: Variable|Array|Scalar, x1: Variable|Array|Scalar) -> Variable:
     y: Variable
     if isinstance(x0, ScalarTypes):
         if isinstance(x1, ScalarTypes):
             y, = Div()(as_array(x0), as_array(x1))
         else:
-            y, = Div()(as_array(x0), x1)
+            y, = Div()(as_array(x0, npcp(x1)), x1)
     else:
         if isinstance(x1, ScalarTypes):
-            y, = Div()(x0, as_array(x1))
+            y, = Div()(x0, as_array(x1, npcp(x0)))
         else:
             y, = Div()(x0, x1)
     return y
 
-def rdiv(x0: Variable|np.ndarray|Scalar, x1: Variable|np.ndarray|Scalar) -> Variable:
+def rdiv(x0: Variable|Array|Scalar, x1: Variable|Array|Scalar) -> Variable:
     return div(x1, x0)
 
 
@@ -249,9 +263,9 @@ class Pow(Function):
         self.c: int = c
 
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y: np.ndarray = x ** self.c
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        y: Array = x ** self.c
         return (y,)
 
     @override
@@ -268,9 +282,11 @@ def pow(x: Variable, c: int) -> Variable:
 
 class Sin(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y: np.ndarray = np.sin(x)
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        xp: ModuleType = npcp(x)
+
+        y: Array = xp.sin(x)
         return (y,)
 
     @override
@@ -286,9 +302,11 @@ def sin(x: Variable) -> Variable:
 
 class Cos(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y: np.ndarray = np.cos(x)
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        xp: ModuleType = npcp(x)
+
+        y: Array = xp.cos(x)
         return (y,)
 
     @override
@@ -304,9 +322,11 @@ def cos(x: Variable) -> Variable:
 
 class Tanh(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y = np.tanh(x)
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        xp: ModuleType = npcp(x)
+
+        y = xp.tanh(x)
         return (y,)
 
     @override
@@ -330,10 +350,10 @@ class Sum(Function):
         self.keepdims: bool = keepdims
 
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
         self.x_shape: tuple[int, ...] = x.shape
-        y: np.ndarray = x.sum(axis = self.axis, keepdims = self.keepdims)
+        y: Array = x.sum(axis = self.axis, keepdims = self.keepdims)
         return (y,)
 
     @override
@@ -374,8 +394,8 @@ class SumTo(Function):
         self.target_shape: tuple[int, ...] = target_shape
 
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
         self.x_shape: tuple[int, ...] = x.shape
 
         ndim: int = len(self.target_shape)
@@ -393,7 +413,7 @@ class SumTo(Function):
         # lead_axis + axis = (0,1,2,4) : sum target axis
         # e.g.)
         #   x.shape: (1,2,3,4,5) -> (1,1,1,4,1)
-        y: np.ndarray = x.sum(lead_axis + axis, keepdims = True)
+        y: Array = x.sum(lead_axis + axis, keepdims = True)
 
         if lead > 0:
             # remove size 1 dim.
@@ -420,10 +440,12 @@ class BroadcastTo(Function):
         self.target_shape: tuple[int, ...] = target_shape
 
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        xp: ModuleType = npcp(x)
+
         self.x_shape: tuple[int, ...] = x.shape
-        y: np.ndarray = np.broadcast_to(x, self.target_shape)
+        y: Array = xp.broadcast_to(x, self.target_shape)
         return (y,)
 
     @override
@@ -443,10 +465,10 @@ class Reshape(Function):
         self.target_shape: tuple[int, ...] = target_shape
 
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
         self.x_shape: tuple[int, ...] = x.shape
-        y: np.ndarray = x.reshape(self.target_shape)
+        y: Array = x.reshape(self.target_shape)
         return (y,)
 
     @override
@@ -466,9 +488,9 @@ class Transpose(Function):
         self.axes: tuple[int, ...]|None = axes
 
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y: np.ndarray = x.transpose(self.axes)
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        y: Array = x.transpose(self.axes)
         return (y,)
 
     @override
@@ -490,13 +512,13 @@ def transpose(x: Variable, axes: tuple[int, ...]|None = None) -> Variable:
 
 class Matmul(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        W: np.ndarray = xs[1]
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        W: Array = xs[1]
         # x: (N,D)
         # W: (D,H)
         # y: (N,H)
-        y: np.ndarray = x.dot(W)
+        y: Array = x.dot(W)
         return (y,)
 
     @override
@@ -514,11 +536,11 @@ def matmul(x: Variable, W: Variable):
 
 class MeanSquaredError(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x0: np.ndarray = xs[0]
-        x1: np.ndarray = xs[1]
-        diff: np.ndarray = x0 - x1
-        y: np.ndarray = (diff ** 2).sum() / len(diff)  # (N,) -> (1,)
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x0: Array = xs[0]
+        x1: Array = xs[1]
+        diff: Array = x0 - x1
+        y: Array = (diff ** 2).sum() / len(diff)  # (N,) -> (1,)
         return (y,)
 
     @override
@@ -538,12 +560,12 @@ def mean_squared_error(x0: Variable, x1: Variable):
 
 class Linear(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        W: np.ndarray = xs[1]
-        y: np.ndarray = x.dot(W)
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        W: Array = xs[1]
+        y: Array = x.dot(W)
         if len(xs) > 2:
-            b: np.ndarray = xs[2]
+            b: Array = xs[2]
             y += b
         return (y,)
 
@@ -577,9 +599,11 @@ def linear(x: Variable, W: Variable, b: Variable|None) -> Variable:
 
 class Sigmoid(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y = 1.0 / (1.0 + np.exp(-x))
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        xp: ModuleType = npcp(x)
+
+        y = 1.0 / (1.0 + xp.exp(-x))
         return (y,)
 
     @override
@@ -599,16 +623,18 @@ def sigmoid(x: Variable) -> Variable:
 
 class ReLU(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y: np.ndarray = np.maximum(x, 0.0)
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        xp: ModuleType = npcp(x)
+
+        y: Array = xp.maximum(x, 0.0)
         return (y,)
 
     @override
     def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
         gy: Variable = gys[0]
         x: Variable = self.inputs[0]
-        mask: np.ndarray = x.data > 0
+        mask: Array = x.data > 0
         gx: Variable = gy * mask
         return (gx,)
 
@@ -621,9 +647,9 @@ class LeakyReLU(Function):
         self.slope: float = slope
 
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y: np.ndarray = x.copy()
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        y: Array = x.copy()
         y[x <= 0] *= self.slope
         return (y,)
 
@@ -631,7 +657,7 @@ class LeakyReLU(Function):
     def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
         gy: Variable = gys[0]
         x: Variable = self.inputs[0]
-        mask: np.ndarray = (x.data > 0).astype(gy.dtype)
+        mask: Array = (x.data > 0).astype(gy.dtype)
         mask[mask <= 0] = self.slope
         gx: Variable = gy * mask
         return (gx,)
@@ -645,10 +671,12 @@ class Softmax(Function):
         self.axis: int = axis
 
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y: np.ndarray = x - x.max(axis = self.axis, keepdims = True)
-        y = np.exp(y)
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        xp: ModuleType = npcp(x)
+
+        y: Array = x - x.max(axis = self.axis, keepdims = True)
+        y = xp.exp(y)
         y /= y.sum(axis = self.axis, keepdims = True)
         return (y,)
 
@@ -671,14 +699,14 @@ def softmax(x: Variable, axis: int = 1) -> Variable:
 
 class SoftmaxCrossEntropy(Function):
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        t: np.ndarray = xs[1]
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        t: Array = xs[1]
         N: int = x.shape[0]
-        log_z: np.ndarray = logsumexp(x, axis = 1)
-        log_p: np.ndarray = x - log_z
+        log_z: Array = logsumexp(x, axis = 1)
+        log_p: Array = x - log_z
         log_p = log_p[np.arange(N), t.ravel()]
-        y: np.ndarray = -log_p.sum() / np.float32(N)  # average for N
+        y: Array = -log_p.sum() / np.float32(N)  # average for N
         return (y,)
 
     @override
@@ -691,7 +719,8 @@ class SoftmaxCrossEntropy(Function):
 
         gy *= 1.0 / N
         y: Variable = softmax(x)
-        t_onehot: np.ndarray = np.eye(CLS_NUM, dtype = t.dtype)[t.data]
+        xp: ModuleType = npcp(t)
+        t_onehot: Array = xp.eye(CLS_NUM, dtype = t.dtype)[t.data]
         gx: Variable = (y - t_onehot) * gy
         return (gx,)
 
@@ -704,9 +733,9 @@ class GetItem(Function):
         self.slices: slice = slices
 
     @override
-    def forward(self, xs: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        x: np.ndarray = xs[0]
-        y: np.ndarray = x[self.slices]
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        y: Array = x[self.slices]
         return (y,)
 
     @override
@@ -726,10 +755,12 @@ class GetItemGrad(Function):
         self.original_shape: tuple[int, ...] = original_shape
 
     @override
-    def forward(self, gys: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
-        gy: np.ndarray = gys[0]
-        gx: np.ndarray = np.zeros(self.original_shape, dtype = gy.dtype)
-        np.add.at(gx, self.slices, gy)  # type: ignore[arg-type]
+    def forward(self, gys: tuple[Array, ...]) -> tuple[Array, ...]:
+        gy: Array = gys[0]
+        xp: ModuleType = npcp(gy)
+
+        gx: Array = xp.zeros(self.original_shape, dtype = gy.dtype)
+        xp.add.at(gx, self.slices, gy)  # type: ignore[arg-type]
         return (gx,)
 
     @override
@@ -743,29 +774,33 @@ def get_item_grad(gy: Variable, slices: slice, original_shape: tuple[int, ...]) 
 
 
 
-def numerical_diff(f, x, eps = 1e-4):
-    x0 = Variable(as_array(x.data - eps))
-    x1 = Variable(as_array(x.data + eps))
+def numerical_diff(f: Callable[[Variable], Variable], x: Variable, eps: float = 1e-4):
+    xp: ModuleType = npcp(x)
+
+    x0 = Variable(as_array(x.data - eps, xp))
+    x1 = Variable(as_array(x.data + eps, xp))
     y0 = f(x0)
     y1 = f(x1)
     return (y1.data - y0.data) / (2 * eps)
 
-def as_array(x):
-    if np.isscalar(x):
-        return np.array(x)
+def as_array(x: Scalar|Array, xp: ModuleType = np):
+    if xp.isscalar(x):
+        return xp.array(x)
     return x
 
-def as_variable(x: np.ndarray|Variable) -> Variable:
+def as_variable(x: Array|Variable) -> Variable:
     if isinstance(x, Variable):
         return x
     return Variable(x)
 
-def logsumexp(x: np.ndarray, axis: int = 1) -> np.ndarray:
-    m: np.ndarray = x.max(axis = axis, keepdims = True)
-    y: np.ndarray = x - m
-    np.exp(y, out = y)  # over write
-    s: np.ndarray = y.sum(axis = axis, keepdims = True)
-    np.log(s, out = s)  # over write
+def logsumexp(x: Array, axis: int = 1) -> Array:
+    xp: ModuleType = npcp(x)
+
+    m: Array = x.max(axis = axis, keepdims = True)
+    y: Array = x - m
+    xp.exp(y, out = y)  # over write
+    s: Array = y.sum(axis = axis, keepdims = True)
+    xp.log(s, out = s)  # over write
     m += s
     return m
 
@@ -788,10 +823,10 @@ def accuracy(actual: Variable, expect: Variable) -> Variable:
     #    [3]]
     # -> reshape
     #   [2, 1, 0, 3]
-    predict: np.ndarray = actual.data.argmax(axis = 1).reshape(expect.shape)
+    predict: Array = actual.data.argmax(axis = 1).reshape(expect.shape)
 
     # result: [True, True, False, True] == [1, 1, 0, 1]
-    result: np.ndarray = (predict == expect.data)
+    result: Array = (predict == expect.data)
 
     accuracy: float = result.mean()
     return Variable(as_array(accuracy))

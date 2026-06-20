@@ -1,3 +1,9 @@
+from deepzero.cuda import gpu_enabled
+if gpu_enabled:
+    print("CUDA on CPU enabled.")
+else:
+    print("Only on CPU.")
+
 from deepzero.Variable import Variable
 from deepzero.Parameter import Parameter
 from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, get_item

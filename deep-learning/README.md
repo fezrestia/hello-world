@@ -34,3 +34,6 @@
     # for all test files under test/.
     $ python3 -m unittest discover -s deepzero/test -p "test_*.py" -t . -v
 
+    # or
+    $ ./test.sh
+

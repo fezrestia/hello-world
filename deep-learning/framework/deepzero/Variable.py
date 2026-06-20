@@ -2,31 +2,38 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-import numpy as np
 from typing import TYPE_CHECKING
+from types import ModuleType
 
 if TYPE_CHECKING:
     from .Function import Function
 
 from .Log import log_d, log_e
-from .Type import Scalar
+from .Type import Scalar, Array, ArrayTypes
 from .Config import use_config
+from .cuda import npcp, as_np, as_cp
 
 class Variable:
     __array_priority__ = 100  # has priority to numpy.ndarray add/mul
 
-    def __init__(self, data: np.ndarray, name = None):
+    def __init__(self, data: Array, name = None):
         if data is not None:
-            if not isinstance(data, np.ndarray):
+            if not isinstance(data, ArrayTypes):
                 raise TypeError(f"{type(data)} is not supported.")
 
-        self.data: np.ndarray = data
+        self.data: Array = data
         self.grad: Variable|None = None
 
         self.creator: Function|None = None
         self.generation: int = 0
 
         self.name: str|None = name
+
+    def to_cpu(self) -> None:
+        self.data = as_np(self.data)
+
+    def to_gpu(self) -> None:
+        self.data = as_cp(self.data)
 
     @property
     def shape(self):
@@ -93,7 +100,8 @@ class Variable:
 
     def backward(self, keep_grad = False, create_graph = False) -> None:
         if self.grad is None:
-            self.grad = Variable(np.ones_like(self.data))
+            xp: ModuleType = npcp(self.data)
+            self.grad = Variable(xp.ones_like(self.data))
 
         func_queue: list[Function] = []
         func_set: set[Function] = set()
