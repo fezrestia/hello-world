@@ -3,6 +3,7 @@ import contextlib
 class Config:
     is_debug = False
     enable_backprop = True
+    train = True
 
 @contextlib.contextmanager
 def use_config(name: str, value):
@@ -15,4 +16,7 @@ def use_config(name: str, value):
 
 def no_grad():
     return use_config("enable_backprop", False)
+
+def test_mode():
+    return use_config("train", False)
 

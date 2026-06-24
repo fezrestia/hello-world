@@ -9,6 +9,8 @@ from typing import override
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+from types import ModuleType
+from PIL import Image
 
 if "__file__" in globals():
     sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -17,19 +19,21 @@ if "__file__" in globals():
 from deepzero import Variable
 from deepzero import Parameter
 from deepzero import Function
-from deepzero import use_config, no_grad
+from deepzero import use_config, no_grad, test_mode
 from deepzero import Visualize
-from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, sin, cos, tanh, sum, reshape, transpose, matmul, linear, sigmoid, mean_squared_error, as_variable, get_item, softmax, softmax_cross_entropy, accuracy, relu
+from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, sin, cos, tanh, sum, reshape, transpose, matmul, linear, sigmoid, mean_squared_error, as_variable, get_item, softmax, softmax_cross_entropy, accuracy, relu, dropout, img2col, col2img, conv2d, deconv2d, pooling, as_array
 from deepzero import Layer
-from deepzero.Layer import Linear
+from deepzero.Layer import Linear, RNN, LSTM
 from deepzero import Model
-from deepzero.Model import MultiLayerPerceptron
+from deepzero.Model import MultiLayerPerceptron, VGG16, SimpleRNN, LSTMRNN
 from deepzero import Optimizer
 from deepzero.Optimizer import StochasticGradientDecent, MomentumSGD, Adam
 from deepzero import DataSet
-from deepzero.DataSet import Spiral, MNIST
-from deepzero import DataLoader
-from deepzero.cuda import gpu_enabled
+from deepzero.DataSet import Spiral, MNIST, SinCurve
+from deepzero import DataLoader, SeqDataLoader
+from deepzero.cuda import gpu_enabled, use_cp, use_np, as_np, as_cp
+from deepzero import get_conv_outsize
+from deepzero.utils import get_file
 
 
 
@@ -858,7 +862,16 @@ from deepzero.cuda import gpu_enabled
 
 
 
-# MNIST learning
+xp: ModuleType
+if gpu_enabled:
+    xp = use_cp()
+else:
+    xp = use_np()
+
+
+
+## MNIST learning
+#
 def preproc(x: np.ndarray) -> np.ndarray:
     x = x.flatten()
     x = x.astype(np.float32)
@@ -871,12 +884,18 @@ batch_size = 100
 hidden_size = 1000
 train_loader = DataLoader(train_set, batch_size)
 test_loader = DataLoader(test_set, batch_size, shuffle = False)
-model = MultiLayerPerceptron((hidden_size, hidden_size, 10), activation = relu)
+model = MultiLayerPerceptron((hidden_size, hidden_size, 10), activation = relu, dropout_ratio = 0.2)
 optimizer = Adam().setup(model)
 if gpu_enabled:
     train_loader.to_gpu()
     test_loader.to_gpu()
     model.to_gpu()
+mnist_npz_file = os.path.expanduser("~/.deepzero/mnist.npz")
+if os.path.exists(mnist_npz_file):
+    print(f"mnist_npz_file = {mnist_npz_file} exists.")
+    model.load_weights(mnist_npz_file)
+else:
+    print(f"mnist_npz_file = {mnist_npz_file} does NOT exist, use default.")
 for epoch in range(max_epoch):
     sum_loss = 0.0
     sum_acc = 0.0
@@ -902,4 +921,167 @@ for epoch in range(max_epoch):
             sum_loss += float(loss.data) * len(t)
             sum_acc += float(acc.data) * len(t)
     print(f"test loss = {sum_loss / len(test_set):.4f}, accuracy = {sum_acc / len(test_set):.4f}")
+model.save_weights(mnist_npz_file)
+
+
+
+#x = Variable(np.ones(5))
+#print(x)
+#y = dropout(x)
+#print(y)
+#with test_mode():
+#    z = dropout(x)
+#    print(z)
+
+#H, W = 4, 4
+#KH, KW = 3, 3
+#SH, SW = 1, 1
+#PH, PW = 1, 1
+#OH = get_conv_outsize(H, KH, SH, PH)
+#OW = get_conv_outsize(W, KW, SW, PW)
+#print(OH, OW)
+
+#xp: ModuleType
+#if gpu_enabled:
+#    xp = use_cp()
+#else:
+#    xp = use_np()
+#x1 = xp.random.rand(1,3,7,7)
+#col1 = img2col(x1, kernel_size = (5, 5), stride = (1,1), padding = (0,0), to_matrix = True)
+#print(col1.shape)
+#x2 = xp.random.rand(10,3,7,7)
+#kernel_size = (5,5)
+#stride = (1,1)
+#padding = (0,0)
+#col2 = img2col(x2, kernel_size, stride, padding, to_matrix = True)
+#print(col2.shape)
+
+#N, C, H, W = 1, 5, 15, 15
+#OC, (KH, KW) = 8, (3, 3)
+#x = Variable(xp.random.randn(N, C, H, W))
+#W = xp.random.randn(OC, C, KH, KW)
+#y = conv2d(x, W, b = None, stride = (1, 1), padding = (1, 1))
+#y.backward()
+#print(y.shape)
+#print(x.grad.shape)
+#z = pooling(x, (3,3), (1,1), (0,0))
+#print(z.shape)
+
+#model = VGG16(pretrained = True)
+#x = xp.random.randn(1, 3, 224, 224).astype(np.float32)  # dummy data
+#model.plot(as_variable(x), to_file = "~/.deepzero/vgg16.png")
+
+#url = "https://github.com/oreilly-japan/deep-learning-from-scratch-3/raw/images/zebra.jpg"
+#img_path = get_file(url)
+#img = Image.open(img_path)
+##img.show()
+#x = VGG16.preprocess(img)
+#print(type(x), x.shape)
+#x = x[np.newaxis]
+#x = Variable(x)
+#if gpu_enabled:
+#    x.to_gpu()
+#model = VGG16(pretrained = True)
+#with test_mode():
+#    (y,) = model(x)
+#print(type(y), y.shape)
+#predict_id = np.argmax(y.data)
+#print(f"predicted_id = {predict_id}")
+#model.plot(x, to_file = "~/.deepzero/vgg16_zebra.png")
+
+#rnn = RNN(10)
+#x = np.random.rand(1, 1)
+#h = rnn(as_variable(x))[0]
+#print(h.shape)
+
+#seq_data = [xp.random.randn(1, 1) for _ in range(1000)]  # dummy data
+#xs = seq_data[0:-1]
+#ts = seq_data[1:]
+#model = SimpleRNN(10, 1)
+#if gpu_enabled:
+#    model.to_gpu()
+#loss, cnt = 0, 0
+#for x, t in zip(xs, ts):
+#    (y,) = model(as_variable(x))
+#    loss += mean_squared_error(y, as_variable(t))
+#    cnt += 1
+#    if cnt == 10:
+#        model.clear_grads()
+#        loss.backward()
+#        break
+#model.plot(xs[0], to_file = "~/.deepzero/simple_rnn.png")
+
+#xp = np
+#train_set = SinCurve(train = True, transform = None, target_transform = None, xp = xp)
+#print(len(train_set))
+#print(train_set[0])
+#print(train_set[1])
+#print(train_set[2])
+#xs = [example[0] for example in train_set]
+#ts = [example[0] for example in train_set]
+#plt.plot(xp.arange(len(xs)), xs, label = "xs")
+#plt.plot(xp.arange(len(ts)), ts, label = "ts")
+#plt.show()
+
+
+
+# RNN sin/cos
+#
+max_epoch = 100
+batch_size = 30
+hidden_size = 100
+bptt_length = 30
+train_set = SinCurve(train = True, transform = None, target_transform = None, xp = xp)
+train_loader = SeqDataLoader(train_set, batch_size = batch_size)
+seqlen = len(train_set)
+#model = SimpleRNN(hidden_size, 1)
+model = LSTMRNN(hidden_size, 1)
+optimizer = Adam().setup(model)
+if gpu_enabled:
+    model.to_gpu()
+    train_loader.to_gpu()
+already_visualized = False
+for epoch in range(max_epoch):
+    model.reset_state()
+    loss = 0.0
+    count = 0
+    for x, t in train_loader:
+        (y,) = model(x)
+        loss += mean_squared_error(y, t)
+        count += 1
+        if count % bptt_length == 0 or count == seqlen:
+            if not already_visualized:
+                #Visualize.plot_dot_graph(loss, verbose = False, to_file = "~/.deepzero/lstm_rnn.png")
+                already_visualized = True
+            model.clear_grads()
+            loss.backward()
+            loss.unchain_backward()
+            optimizer.update()
+    avg_loss = float(loss.data) / count
+    print(f"epoch = {epoch + 1}, loss = {avg_loss}")
+# predict
+model.to_cpu()
+xs = np.cos(np.linspace(0, 4 * np.pi, 1024))
+model.reset_state()
+pred_list = []
+with no_grad():
+    for x in xs:
+        x = np.array(x).reshape(1, 1)
+        (y,) = model(x)
+        pred_list.append(float(y.data[0, 0]))
+plt.plot(np.arange(len(xs)), xs, label = "y=cos(x)")
+plt.plot(np.arange(len(xs)), pred_list, label = "predict")
+plt.xlabel("x")
+plt.ylabel("y")
+plt.legend()
+plt.show()
+
+
+
+#train_set = SinCurve(train = True)
+#dataloader = SeqDataLoader(train_set, batch_size = 3)
+#x, t = next(dataloader)
+#print(x)
+#print("------")
+#print(t)
 

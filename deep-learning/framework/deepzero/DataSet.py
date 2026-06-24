@@ -1,11 +1,14 @@
 import numpy as np
+from numpy.typing import DTypeLike
 from typing import override, Callable, TypeVar
 from pathlib import Path
 import matplotlib.pyplot as plt
 import gzip
+from types import ModuleType
 
 from .Log import log_d, log_e
 from .dataset import spiral
+from .Type import Array
 
 class DataSet:
     def __init__(self,
@@ -121,4 +124,37 @@ class MNIST(DataSet):
         plt.imshow(img, cmap = "gray", interpolation = "nearest")
         plt.axis("off")
         plt.show()
+
+
+class SinCurve(DataSet):
+    def __init__(
+            self,
+            train: bool = True,
+            transform: Callable[[np.ndarray], np.ndarray]|None = None,
+            target_transform: Callable[[np.ndarray], np.ndarray]|None = None,
+            xp: ModuleType = np,
+    ) -> None:
+        self.xp: ModuleType = xp
+
+        super().__init__(train, transform, target_transform)  # calling prepare()
+
+    @override
+    def prepare(self) -> None:
+        num_data: int = 1024
+        dtype: DTypeLike = np.float32
+
+        x: Array = self.xp.linspace(0, 2 * np.pi, num_data)
+        noise_range: tuple[float, float] = (-0.05, 0.05)
+        noise: Array = self.xp.random.uniform(noise_range[0], noise_range[1], size = x.shape)
+
+        y: Array
+        if self.train:
+            y = self.xp.sin(x) + noise
+        else:
+            y = self.xp.cos(x)
+
+        y = y.astype(dtype)
+
+        self.data = y[:-1][:, np.newaxis]
+        self.label = y[1:][:, np.newaxis]
 

@@ -167,3 +167,17 @@ class Variable:
         from .Function import sum
         return sum(self, axis, keepdims)
 
+
+    def unchain(self) -> None:
+        self.creator = None
+
+    def unchain_backward(self) -> None:
+        if self.creator is not None:
+            funcs: list[Function] = [self.creator]
+            while funcs:
+                f: Function = funcs.pop()
+                for x in f.inputs:
+                    if x.creator is not None:
+                        funcs.append(x.creator)
+                        x.unchain()
+

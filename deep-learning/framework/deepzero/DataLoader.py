@@ -1,7 +1,7 @@
 import numpy as np
 import math
 from collections.abc import Iterator
-from typing import Self
+from typing import Self, override
 from types import ModuleType
 
 from .DataSet import DataSet
@@ -57,4 +57,33 @@ class DataLoader:
 
     def to_gpu(self) -> None:
         self.use_gpu = True
+
+
+class SeqDataLoader(DataLoader):
+    def __init__(self, dataset: DataSet, batch_size: int, use_gpu: bool = False) -> None:
+        super().__init__(dataset = dataset, batch_size = batch_size, shuffle = False, use_gpu = use_gpu)
+
+    @override
+    def __next__(self) -> tuple[Array, Array]:
+        if self.iteration >= self.max_iter:
+            self.reset()
+            raise StopIteration
+
+        # batch 0 : [0, 100, 200, ...]
+        # batch 1 : [1, 101, 201, ...]
+        jump: int = self.data_size // self.batch_size
+        batch_index: list[int] = [(i * jump + self.iteration) % self.data_size for i in range(self.batch_size)]
+        batch: list[tuple[np.ndarray, np.ndarray|None]] = [self.dataset[i] for i in batch_index]
+
+        xp: ModuleType
+        if self.use_gpu:
+            xp = use_cp()
+        else:
+            xp = use_np()
+
+        x: Array = xp.array([sample[0] for sample in batch])
+        t: Array = xp.array([sample[1] for sample in batch])
+
+        self.iteration += 1
+        return (x, t)
 

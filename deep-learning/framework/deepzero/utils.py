@@ -1,9 +1,9 @@
 import numpy as np
 from collections.abc import Callable
+import urllib.request
+import os
 
 from .Variable import Variable
-from .Function import Function
-from .Function import as_variable
 from .Type import Scalar
 
 def gradient_check(
@@ -14,6 +14,8 @@ def gradient_check(
         atol = 1e-5,  ## absolute tolerance
         **kwargs,  # keyward args
 ):
+    from .Function import as_variable
+
     x = as_variable(x)
     x.data = x.data.astype(np.float64)
 
@@ -80,4 +82,34 @@ def array_equal(a, b):
     a = a.data if isinstance(a, Variable) else a
     b = b.data if isinstance(b, Variable) else b
     return np.array_equal(a, b)
+
+def get_conv_outsize(input_size: int, kernel_size: int, stride: int, padding: int) -> int:
+    return (input_size + padding * 2 - kernel_size) // stride + 1
+
+def get_deconv_outsize(input_size: int, kernel_size: int, stride: int, padding: int) -> int:
+    return stride * (input_size - 1) + kernel_size - 2 * padding
+
+def get_file(url: str, file_name: str|None = None) -> str:
+    if file_name is None:
+        file_name = url[url.rfind("/") + 1:]
+
+    target_dir = os.path.expanduser("~/.deepzero")
+    file_path = os.path.join(target_dir, file_name)
+
+    if not os.path.exists(target_dir):
+        os.mkdir(target_dir)
+
+    if os.path.exists(file_path):
+        return file_path
+
+    print(f"Downloading : {file_path}")
+    try:
+        urllib.request.urlretrieve(url, file_path)
+    except (Exception, KeyboardInterrupt) as e:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
+    print("Done")
+
+    return file_path
 

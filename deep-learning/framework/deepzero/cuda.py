@@ -10,6 +10,8 @@ try:
     gpu_enabled = True
 except ImportError:
     gpu_enabled = False
+# overrider
+#gpu_enabled = False
 
 from .Type import Array, ArrayTypes, Scalar, ScalarTypes
 if TYPE_CHECKING:
