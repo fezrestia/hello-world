@@ -1,6 +1,6 @@
 from deepzero.cuda import gpu_enabled
 if gpu_enabled:
-    print("CUDA on CPU enabled.")
+    print("CUDA on GPU enabled.")
 else:
     print("Only on CPU.")
 
