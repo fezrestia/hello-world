@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 if "__file__" in globals():
     sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from Bandit import Bandit
-from Agent import Agent
+from Bandit import Bandit, NonStatBandit
+from Agent import Agent, AlphaAgent
 
 
 
@@ -18,8 +18,10 @@ steps: int = 1000
 epsilon: float = 0.1
 all_rates: np.ndarray = np.zeros((runs, steps))
 for run in range(runs):
-    bandit: Bandit = Bandit()
-    agent: Agent = Agent(epsilon)
+    #bandit: Bandit = Bandit()
+    #agent: Agent = Agent(epsilon)
+    bandit: NonStatBandit = NonStatBandit()
+    agent: AlphaAgent = AlphaAgent(epsilon, 0.8)
     total_reward: float = 0.0
     total_rewards: list[float] = []
     rates: list[float] = []
