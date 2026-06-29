@@ -84,15 +84,15 @@ import sys
 #    V[state] = np.random.randn()
 #env.render_v(V)
 
-# state vs. action poicy
-pi: dict[tuple[int, int], dict[int, float]] = defaultdict(lambda: {
-        0: 0.25,
-        1: 0.25,
-        2: 0.25,
-        3: 0.25,
-})
-state: tuple[int, int] = (0, 1)
-print(pi[state])
+## state vs. action poicy
+#pi: dict[tuple[int, int], dict[int, float]] = defaultdict(lambda: {
+#        0: 0.25,
+#        1: 0.25,
+#        2: 0.25,
+#        3: 0.25,
+#})
+#state: tuple[int, int] = (0, 1)
+#print(pi[state])
 
 def eval_onestep(
         pi: dict[tuple[int, int], dict[int, float]],
@@ -143,10 +143,148 @@ def policy_eval(
 
     return V
 
-env = GridWorld()
-gamma = 0.9
-pi = defaultdict(lambda: {0: 0.25, 1: 0.25, 2: 0.25, 3: 0.25})
-V: dict[tuple[int, int], float] = defaultdict(lambda: 0.0)
-V = policy_eval(pi, V, env, gamma)
-env.render_v(V, pi)
+#env = GridWorld()
+#gamma = 0.9
+#pi = defaultdict(lambda: {0: 0.25, 1: 0.25, 2: 0.25, 3: 0.25})
+#V: dict[tuple[int, int], float] = defaultdict(lambda: 0.0)
+#V = policy_eval(pi, V, env, gamma)
+#env.render_v(V, pi)
+
+def argmax(d: dict[int, float]) -> int:
+    max_val: float = max(d.values())
+    max_key: int = 0
+    for key, val in d.items():
+        if val == max_val:
+            max_key = key
+    return max_key
+
+#action_values = {0: 0.1, 1: -0.3, 2: 9.9, 3: -1.3}
+#max_act = argmax(action_values)
+#print(max_act)
+
+def greedy_policy(
+        V: dict[tuple[int, int], float],
+        env: GridWorld,
+        gamma: float,
+) -> dict[tuple[int, int], dict[int, float]]:
+    pi: dict[tuple[int, int], dict[int, float]] = {}
+
+    for state in env.states():
+        action_values: dict[int, float] = {}
+
+        for action in env.actions():
+            next_state: tuple[int, int] = env.next_state(state, action)
+
+            r: float|None = env.reward(state, action, next_state)
+
+            if r is None:
+                raise Exception("Unexpected: r is None")
+
+            value: float = r + gamma * V[next_state]
+            action_values[action] = value
+
+        max_action: int = argmax(action_values)
+
+        action_probs: dict[int, float] = {
+                0: 0.0,
+                1: 0.0,
+                2: 0.0,
+                3: 0.0,
+        }
+        action_probs[max_action] = 1.0
+
+        pi[state] = action_probs
+
+    return pi
+
+def policy_iter(
+        env: GridWorld,
+        gamma: float,
+        threshold: float = 0.001,
+        is_render: bool = False,
+) -> dict[tuple[int, int], dict[int, float]]:
+    pi: dict[tuple[int, int], dict[int, float]] = defaultdict(lambda: {
+            0: 0.25,
+            1: 0.25,
+            2: 0.25,
+            3: 0.25,
+    })
+
+    V: dict[tuple[int, int], float] = defaultdict(lambda: 0.0)
+
+    while True:
+        V = policy_eval(pi, V, env, gamma, threshold)
+        new_pi: dict[tuple[int, int], dict[int, float]] = greedy_policy(V, env, gamma)
+
+        if is_render:
+            env.render_v(V, pi)
+
+        if new_pi == pi:
+            break
+
+        pi = new_pi
+
+    return pi
+
+#env = GridWorld()
+#gamma = 0.9
+#pi = policy_iter(env, gamma, 0.0001, True)
+
+def value_iter_onestep(
+        V: dict[tuple[int, int], float],
+        env: GridWorld,
+        gamma: float = 0.9,
+) -> dict[tuple[int, int], float]:
+    for state in env.states():
+        if state == env.goal_state:
+            V[state] = 0.0
+            continue
+
+        action_values: list[float] = []
+
+        for action in env.actions():
+            next_state: tuple[int, int] = env.next_state(state, action)
+            r: float|None = env.reward(state, action, next_state)
+
+            if r is None:
+                raise Exception("Unexpected: r is None")
+
+            value: float = r + gamma * V[next_state]
+            action_values.append(value)
+
+        V[state] = max(action_values)
+
+    return V
+
+def value_iter(
+        V: dict[tuple[int, int], float],
+        env: GridWorld,
+        gamma: float = 0.9,
+        threshold: float = 0.001,
+        is_render = True,
+) -> dict[tuple[int, int], float]:
+    while True:
+        if is_render:
+            env.render_v(V)
+
+        old_V: dict[tuple[int, int], float] = V.copy()
+        V = value_iter_onestep(V, env, gamma)
+
+        delta: float = 0.0
+        for state in V.keys():
+            d: float = abs(V[state] - old_V[state])
+            if delta < d:
+                delta = d
+
+        if delta < threshold:
+            break
+
+    return V
+
+#V: dict[tuple[int, int], float] = defaultdict(lambda: 0.0)
+#env = GridWorld()
+#gamma = 0.9
+#V = value_iter(V, env, gamma)
+#pi = greedy_policy(V, env, gamma)
+#env.render_v(V, pi)
 
