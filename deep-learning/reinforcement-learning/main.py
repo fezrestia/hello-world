@@ -10,16 +10,18 @@ from collections import defaultdict
 if "__file__" in globals():
     sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from Bandit import Bandit, NonStatBandit
-from Agent import Agent, AlphaAgent, RandomAgent, MonteCarloAgent
-from GridWorld import GridWorld
-
 
 
 import importlib
 import sys
-importlib.reload(sys.modules["GridWorld"])
-importlib.reload(sys.modules["Agent"])
+#importlib.reload(sys.modules["GridWorld"])
+#importlib.reload(sys.modules["Agent"])
+
+
+
+from Bandit import Bandit, NonStatBandit
+from Agent import Agent, AlphaAgent, RandomAgent, MonteCarloAgent, TemporalDifferenceAgent, SarsaAgent, SarsaOffPolicyAgent, QLearningAgent
+from GridWorld import GridWorld
 
 
 
@@ -310,28 +312,72 @@ def value_iter(
 #        state = next_state
 #env.render_q(agent.Q)
 
-x = np.array([1,2,3])
-pi = np.array([0.1,0.1,0.8])
-e = np.sum(x * pi)
-print(f"E = {e}")
-n = 100
-samples = []
-for _ in range(n):
-    s = np.random.choice(x, p = pi)
-    samples.append(s)
-mean = np.mean(samples)
-var = np.var(samples)
-print(f"mean = {mean}, var = {var}")
-b = np.array([0.2, 0.2, 0.6])
-n = 100
-samples = []
-for _ in range(n):
-    idx = np.arange(len(b))
-    i = np.random.choice(idx, p = b)
-    s = x[i]
-    rho = pi[i] / b[i]
-    samples.append(rho * s)
-mean = np.mean(samples)
-var = np.var(samples)
-print(f"mean = {mean}, var = {var}")
+#x = np.array([1,2,3])
+#pi = np.array([0.1,0.1,0.8])
+#e = np.sum(x * pi)
+#print(f"E = {e}")
+#n = 100
+#samples = []
+#for _ in range(n):
+#    s = np.random.choice(x, p = pi)
+#    samples.append(s)
+#mean = np.mean(samples)
+#var = np.var(samples)
+#print(f"mean = {mean}, var = {var}")
+#b = np.array([0.2, 0.2, 0.6])
+#n = 100
+#samples = []
+#for _ in range(n):
+#    idx = np.arange(len(b))
+#    i = np.random.choice(idx, p = b)
+#    s = x[i]
+#    rho = pi[i] / b[i]
+#    samples.append(rho * s)
+#mean = np.mean(samples)
+#var = np.var(samples)
+#print(f"mean = {mean}, var = {var}")
+
+#env = GridWorld()
+#agent = TemporalDifferenceAgent()
+#episodes = 1000
+#for episode in range(episodes):
+#    state = env.reset()
+#    while True:
+#        action = agent.get_action(state)
+#        next_state, reward, done = env.step(action)
+#        agent.eval(state, reward, next_state, done)
+#        if done:
+#            break
+#        state = next_state
+#env.render_v(agent.V)
+
+#env = GridWorld()
+#agent = SarsaOffPolicyAgent()
+#episodes = 10000
+#for episode in range(episodes):
+#    state = env.reset()
+#    agent.reset()
+#    while True:
+#        action = agent.get_action(state)
+#        next_state, reward, done = env.step(action)
+#        agent.update(state, action, reward, done)
+#        if done:
+#            agent.update(next_state, 0, 0.0, False)
+#            break
+#        state = next_state
+#env.render_q(agent.Q)
+
+env = GridWorld()
+agent = QLearningAgent()
+episodes = 10000
+for episode in range(episodes):
+    state = env.reset()
+    while True:
+        action = agent.get_action(state)
+        next_state, reward, done = env.step(action)
+        agent.update(state, action, reward, next_state, done)
+        if done:
+            break
+        state = next_state
+env.render_q(agent.Q)
 
