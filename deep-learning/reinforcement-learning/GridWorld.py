@@ -75,9 +75,31 @@ class GridWorld:
     ) -> float|None:
         return self.reward_map[next_state]
 
+    def step(self, action: int) -> tuple[tuple[int, int], float, bool]:
+        state: tuple[int, int] = self.agent_state
+        next_state: tuple[int, int] = self.next_state(state, action)
+        reward: float|None = self.reward(state, action, next_state)
+
+        if reward is None:
+            raise Exception("Unexpected, reward is None.")
+
+        done: bool = (next_state == self.goal_state)
+
+        self.agent_state = next_state
+
+        return (next_state, reward, done)
+
+    def reset(self) -> tuple[int, int]:
+        self.agent_state = self.start_state
+        return self.agent_state
+
     def render_v(self, v = None, policy = None, print_value = True):
         renderer = Renderer(self.reward_map, self.goal_state, self.wall_state)
         renderer.render_v(v, policy, print_value)
+
+    def render_q(self, q = None, print_value = True):
+        renderer = Renderer(self.reward_map, self.goal_state, self.wall_state)
+        renderer.render_q(q, print_value)
 
 
 
@@ -164,4 +186,78 @@ class Renderer:
                 if state == self.wall_state:
                     ax.add_patch(plt.Rectangle((x,ys-y-1), 1, 1, fc=(0.4, 0.4, 0.4, 1.)))
         plt.show()
+
+    def render_q(self, q, show_greedy_policy=True):
+        self.set_figure()
+
+        ys, xs = self.ys, self.xs
+        ax = self.ax
+        action_space = [0, 1, 2, 3]
+
+        qmax, qmin = max(q.values()), min(q.values())
+        qmax = max(qmax, abs(qmin))
+        qmin = -1 * qmax
+        qmax = 1 if qmax < 1 else qmax
+        qmin = -1 if qmin > -1 else qmin
+
+
+        color_list = ['red', 'white', 'green']
+        cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
+            'colormap_name', color_list)
+
+        for y in range(ys):
+            for x in range(xs):
+                for action in action_space:
+                    state = (y, x)
+                    r = self.reward_map[y, x]
+                    if r != 0 and r is not None:
+                        txt = 'R ' + str(r)
+                        if state == self.goal_state:
+                            txt = txt + ' (GOAL)'
+                        ax.text(x+.05, ys-y-0.95, txt)
+
+                    if state == self.goal_state:
+                        continue
+
+                    tx, ty = x, ys-y-1
+
+                    action_map = {
+                        0: ((0.5+tx, 0.5+ty), (tx+1, ty+1), (tx, ty+1)),
+                        1: ((tx, ty), (tx+1, ty), (tx+0.5, ty+0.5)),
+                        2: ((tx, ty), (tx+0.5, ty+0.5), (tx, ty+1)),
+                        3: ((0.5+tx, 0.5+ty), (tx+1, ty), (tx+1, ty+1)),
+                    }
+                    offset_map = {
+                        0: (0.1, 0.8),
+                        1: (0.1, 0.1),
+                        2: (-0.2, 0.4),
+                        3: (0.4, 0.4),
+                    }
+                    if state == self.wall_state:
+                        ax.add_patch(plt.Rectangle((tx, ty), 1, 1, fc=(0.4, 0.4, 0.4, 1.)))
+                    elif state in self.goal_state:
+                        ax.add_patch(plt.Rectangle((tx, ty), 1, 1, fc=(0., 1., 0., 1.)))
+                    else:
+
+                        tq = q[(state, action)]
+                        color_scale = 0.5 + (tq / qmax) / 2  # normalize: 0.0-1.0
+
+                        poly = plt.Polygon(action_map[action],fc=cmap(color_scale))
+                        ax.add_patch(poly)
+
+                        offset= offset_map[action]
+                        ax.text(tx+offset[0], ty+offset[1], "{:12.2f}".format(tq))
+        plt.show()
+
+        if show_greedy_policy:
+            policy = {}
+            for y in range(self.ys):
+                for x in range(self.xs):
+                    state = (y, x)
+                    qs = [q[state, action] for action in range(4)]  # action_size
+                    max_action = np.argmax(qs)
+                    probs = {0:0.0, 1:0.0, 2:0.0, 3:0.0}
+                    probs[max_action] = 1
+                    policy[state] = probs
+            self.render_v(None, policy)
 

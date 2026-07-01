@@ -10,15 +10,18 @@ from collections import defaultdict
 if "__file__" in globals():
     sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from Bandit import Bandit, NonStatBandit
-from Agent import Agent, AlphaAgent
-from GridWorld import GridWorld
-
 
 
 import importlib
 import sys
-#importlib.reload(sys.modules["GridWorld"])
+importlib.reload(sys.modules["GridWorld"])
+importlib.reload(sys.modules["Agent"])
+
+
+
+from Bandit import Bandit, NonStatBandit
+from Agent import Agent, AlphaAgent, RandomAgent, MonteCarloAgent
+from GridWorld import GridWorld
 
 
 
@@ -287,4 +290,25 @@ def value_iter(
 #V = value_iter(V, env, gamma)
 #pi = greedy_policy(V, env, gamma)
 #env.render_v(V, pi)
+
+#env = GridWorld()
+#action = 0
+#(next_state, reward, done) = env.step(action)
+#print(f"next_state = {next_state}, reward = {reward}, done = {done}")
+
+env = GridWorld()
+agent = MonteCarloAgent()
+episodes = 10000
+for episode in range(episodes):
+    state = env.reset()
+    agent.reset()
+    while True:
+        action = agent.get_action(state)
+        next_state, reward, done = env.step(action)
+        agent.add(state, action, reward)
+        if done:
+            agent.update()
+            break
+        state = next_state
+env.render_q(agent.Q)
 
