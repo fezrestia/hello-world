@@ -49,7 +49,7 @@ def numerical_grad(
     x = x.data if isinstance(x, Variable) else x
     grad = np.zeros_like(x)
 
-    it = np.nditer(x, flags = ["multi_index"], op_flags = ["readwrite"])
+    it = np.nditer(x, flags = ["multi_index"], op_flags = [["readwrite"]])
     while not it.finished:
         idx = it.multi_index
         tmp_val = x[idx].copy()

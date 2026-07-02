@@ -92,6 +92,29 @@ class Variable:
     # for mypy
     def __pow__(self: Variable, c: int):
         pass
+    # for mypy
+    def __getitem__(self: Variable, slices: slice|tuple[slice|int, ...]) -> Variable:
+        return self
+    # for mypy
+    def matmul(self: Variable, x: Variable) -> Variable:
+        return self
+    # for mypy
+    def dot(self: Variable, x: Variable) -> Variable:
+        return self
+    # for mypy
+    def max(
+        self: Variable,
+        axis: int|tuple[int, ...]|None = None,
+        keepdims: bool = False,
+    ) -> Variable:
+        return self
+    # for mypy
+    def min(
+        self: Variable,
+        axis: int|tuple[int, ...]|None = None,
+        keepdims: bool = False,
+    ) -> Variable:
+        return self
 
 
     def set_creator(self, func: Function):

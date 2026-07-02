@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from collections import defaultdict
+from typing import override
 
 if "__file__" in globals():
     sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -20,7 +21,7 @@ import sys
 
 
 from Bandit import Bandit, NonStatBandit
-from Agent import Agent, AlphaAgent, RandomAgent, MonteCarloAgent, TemporalDifferenceAgent, SarsaAgent, SarsaOffPolicyAgent, QLearningAgent
+from Agent import Agent, AlphaAgent, RandomAgent, MonteCarloAgent, TemporalDifferenceAgent, SarsaAgent, SarsaOffPolicyAgent, QLearningAgent, DNNQLearningAgent
 from GridWorld import GridWorld
 
 
@@ -367,17 +368,104 @@ def value_iter(
 #        state = next_state
 #env.render_q(agent.Q)
 
+#env = GridWorld()
+#agent = QLearningAgent()
+#episodes = 10000
+#for episode in range(episodes):
+#    state = env.reset()
+#    while True:
+#        action = agent.get_action(state)
+#        next_state, reward, done = env.step(action)
+#        agent.update(state, action, reward, next_state, done)
+#        if done:
+#            break
+#        state = next_state
+#env.render_q(agent.Q)
+
+
+
+# newral network included
+
+from deepzero import Variable
+from deepzero import Parameter
+from deepzero import Function
+from deepzero import use_config, no_grad, test_mode
+from deepzero import Visualize
+from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, sin, cos, tanh, sum, reshape, transpose, matmul, linear, sigmoid, mean_squared_error, as_variable, get_item, softmax, softmax_cross_entropy, accuracy, relu, dropout, img2col, col2img, conv2d, deconv2d, pooling, as_array
+from deepzero import Layer
+from deepzero.Layer import Linear, RNN, LSTM
+from deepzero import Model
+from deepzero.Model import MultiLayerPerceptron, VGG16, SimpleRNN, LSTMRNN
+from deepzero import Optimizer
+from deepzero.Optimizer import StochasticGradientDecent, MomentumSGD, Adam
+from deepzero import DataSet
+from deepzero.DataSet import Spiral, MNIST, SinCurve
+from deepzero import DataLoader, SeqDataLoader
+from deepzero.cuda import gpu_enabled, use_cp, use_np, as_np, as_cp
+from deepzero import get_conv_outsize
+from deepzero.utils import get_file
+
+from Model import QNet
+
+
+
+def one_hot(state: tuple[int, int]) -> np.ndarray:
+    HEIGHT: int = 3
+    WIDTH: int = 4
+
+    vec: np.ndarray = np.zeros(HEIGHT * WIDTH, dtype = np.float32)
+
+    y, x = state
+
+    idx: int = WIDTH * y + x
+    vec[idx] = 1.0
+
+    return vec[np.newaxis, :]  # for batch axis
+
+
+
+#state = (2, 0)
+#x = one_hot(state)
+#print(x.shape)
+#print(x)
+
+#qnet = QNet()
+#state = (2, 0)
+#state_array = one_hot(state)
+#(qs,) = qnet(as_variable(state_array))
+#print(qs.shape)
+#print(qs)
+
 env = GridWorld()
-agent = QLearningAgent()
-episodes = 10000
+agent = DNNQLearningAgent()
+episodes = 1000
+loss_history = []
 for episode in range(episodes):
     state = env.reset()
-    while True:
-        action = agent.get_action(state)
+    state_array = one_hot(state)
+    total_loss = 0.0
+    cnt = 0
+    done = False
+    while not done:
+        action = agent.get_action(state_array)
         next_state, reward, done = env.step(action)
-        agent.update(state, action, reward, next_state, done)
-        if done:
-            break
-        state = next_state
-env.render_q(agent.Q)
+        next_state_array = one_hot(next_state)
+        loss = agent.update(state_array, action, reward, next_state_array, done)
+        total_loss += loss
+        cnt += 1
+        state_array = next_state_array
+    average_loss = total_loss / cnt
+    loss_history.append(average_loss)
+    if episode % 100 == 0:
+        print(f"average_loss = {average_loss}")
+plt.xlabel('episode')
+plt.ylabel('loss')
+plt.plot(range(len(loss_history)), loss_history)
+plt.show()
+Q = {}
+for state in env.states():
+    for action in env.action_space:
+        q = agent.qnet(one_hot(state))[0][:, action]
+        Q[state, action] = float(q.data[0])
+env.render_q(Q)
 

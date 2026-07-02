@@ -282,6 +282,71 @@ def pow(x: Variable, c: int) -> Variable:
     return Pow(c)(x)[0]
 
 
+def max_backward_shape(x: Array, axis: int|tuple[int, ...]|None) -> tuple[int, ...]:
+    if axis is None:
+        axis = tuple(range(x.ndim))
+    elif isinstance(axis, int):
+        axis = (axis,)
+    else:
+        axis = axis
+
+    shape: tuple[int, ...] = tuple(s if ax not in axis else 1 for ax, s in enumerate(x.shape))
+    return shape
+
+class Max(Function):
+    def __init__(
+            self,
+            axis:int|tuple[int, ...]|None = None,
+            keepdims: bool = False,
+    ) -> None:
+        self.axis: int|tuple[int, ...]|None = axis
+        self.keepdims: bool = keepdims
+
+    @override
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        y: Array = x.max(axis = self.axis, keepdims=self.keepdims)
+        return (y,)
+
+    @override
+    def backward(self, gys: tuple[Variable, ...]) -> tuple[Variable, ...]:
+        gy: Variable = gys[0]
+        x: Variable = self.inputs[0]
+        y: Variable|None = self.outputs[0]()  # weakref
+
+        if y is None:
+            raise Exception("Unexpected, y is None.")
+
+        shape: tuple[int, ...] = max_backward_shape(x, self.axis)
+        gy = reshape(gy, shape)
+        y = reshape(y, shape)
+        cond: Array = (x.data == y.data)
+        gy = broadcast_to(gy, cond.shape)
+        return (gy * cond,)
+
+def var_max(
+        x: Variable,
+        axis: int|tuple[int, ...]|None = None,
+        keepdims: bool = False,
+) -> Variable:
+    return Max(axis, keepdims)(x)[0]
+
+
+class Min(Max):
+    @override
+    def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
+        x: Array = xs[0]
+        y: Array = x.min(axis = self.axis, keepdims = self.keepdims)
+        return (y,)
+
+def var_min(
+        x: Variable,
+        axis: int|tuple[int, ...]|None = None,
+        keepdims: bool = False,
+) -> Variable:
+    return Min(axis, keepdims)(x)[0]
+
+
 class Sin(Function):
     @override
     def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
@@ -532,7 +597,7 @@ class Matmul(Function):
         gW: Variable = matmul(x.T, gy)
         return (gx, gW)
 
-def matmul(x: Variable, W: Variable):
+def matmul(x: Variable, W: Variable) -> Variable:
     return Matmul()(x, W)[0]
 
 
@@ -762,8 +827,8 @@ def dropout(x: Variable, dropout_ratio: float = 0.5) -> Variable:
 
 
 class GetItem(Function):
-    def __init__(self, slices: slice) -> None:
-        self.slices: slice = slices
+    def __init__(self, slices: slice|tuple[slice|int, ...]) -> None:
+        self.slices: slice|tuple[slice|int, ...] = slices
 
     @override
     def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
@@ -778,13 +843,17 @@ class GetItem(Function):
         gx: Variable = get_item_grad(gy, self.slices, x.shape)
         return (gx,)
 
-def get_item(x: Variable, slices: slice) -> Variable:
+def get_item(x: Variable, slices: slice|tuple[slice|int, ...]) -> Variable:
     return GetItem(slices)(x)[0]
 
 
 class GetItemGrad(Function):
-    def __init__(self, slices: slice, original_shape: tuple[int, ...]) -> None:
-        self.slices: slice = slices
+    def __init__(
+            self,
+            slices: slice|tuple[slice|int, ...],
+            original_shape: tuple[int, ...],
+    ) -> None:
+        self.slices: slice|tuple[slice|int, ...] = slices
         self.original_shape: tuple[int, ...] = original_shape
 
     @override
@@ -802,7 +871,11 @@ class GetItemGrad(Function):
         y = get_item(x, self.slices)
         return (y,)
 
-def get_item_grad(gy: Variable, slices: slice, original_shape: tuple[int, ...]) -> Variable:
+def get_item_grad(
+        gy: Variable,
+        slices: slice|tuple[slice|int, ...],
+        original_shape: tuple[int, ...],
+) -> Variable:
     return GetItemGrad(slices, original_shape)(gy)[0]
 
 

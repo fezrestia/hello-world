@@ -1,6 +1,13 @@
 import numpy as np
 from collections import defaultdict, deque
 
+from deepzero.Variable import Variable
+from deepzero.Optimizer import StochasticGradientDecent
+from deepzero.Function import as_variable, mean_squared_error
+from deepzero.Type import Array
+
+from Model import QNet
+
 class Agent:
     def __init__(self, epsilon: float, action_size: int = 10) -> None:
         self.epsilon: float = epsilon
@@ -311,4 +318,56 @@ class QLearningAgent:
 
         target: float = reward + self.gamma * next_q_max
         self.Q[state, action] += (target - self.Q[state, action]) * self.alpha
+
+
+
+class DNNQLearningAgent:
+    def __init__(self) -> None:
+        self.gamma: float = 0.9
+        self.learning_rate: float = 0.01
+        self.epsilon: float = 0.1
+        self.action_size: int = 4
+
+        self.qnet: QNet = QNet()
+
+        self.optimizer: StochasticGradientDecent \
+                = StochasticGradientDecent(self.learning_rate)
+        self.optimizer.setup(self.qnet)
+
+    def get_action(self, state: Array) -> int:
+        if np.random.rand() < self.epsilon:
+            return np.random.choice(self.action_size)
+        else:
+            qs: Variable
+            (qs,) = self.qnet(as_variable(state))
+            return int(qs.data.argmax())
+
+    def update(
+        self,
+        state: Array,
+        action: int,
+        reward: float,
+        next_state: Array,
+        done: bool,
+    ) -> np.ndarray:
+        next_q: Variable
+        if done:
+            next_q = as_variable(np.zeros(1))  # [0.0]
+        else:
+            next_qs: Variable
+            (next_qs,) = self.qnet(as_variable(next_state))
+            next_q = next_qs.max(axis = 1)
+            next_q.unchain()
+
+        target: float = reward + self.gamma * next_q
+        qs: Variable
+        (qs,) = self.qnet(as_variable(state))
+        q: Variable = qs[:, action]
+        loss: Variable = mean_squared_error(as_variable(target), q)
+
+        self.qnet.clear_grads()
+        loss.backward()
+        self.optimizer.update()
+
+        return loss.data
 
