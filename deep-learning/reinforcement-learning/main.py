@@ -5,8 +5,8 @@ import os
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-from collections import defaultdict
-from typing import override
+from collections import defaultdict, deque
+from typing import override, Any
 
 if "__file__" in globals():
     sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -19,9 +19,8 @@ import sys
 #importlib.reload(sys.modules["Agent"])
 
 
-
 from Bandit import Bandit, NonStatBandit
-from Agent import Agent, AlphaAgent, RandomAgent, MonteCarloAgent, TemporalDifferenceAgent, SarsaAgent, SarsaOffPolicyAgent, QLearningAgent, DNNQLearningAgent
+from Agent import Agent, AlphaAgent, RandomAgent, MonteCarloAgent, TemporalDifferenceAgent, SarsaAgent, SarsaOffPolicyAgent, QLearningAgent, DNNQLearningAgent, DQNAgent
 from GridWorld import GridWorld
 
 
@@ -404,6 +403,7 @@ from deepzero import DataLoader, SeqDataLoader
 from deepzero.cuda import gpu_enabled, use_cp, use_np, as_np, as_cp
 from deepzero import get_conv_outsize
 from deepzero.utils import get_file
+from deepzero.Type import Array
 
 from Model import QNet
 
@@ -436,36 +436,82 @@ def one_hot(state: tuple[int, int]) -> np.ndarray:
 #print(qs.shape)
 #print(qs)
 
-env = GridWorld()
-agent = DNNQLearningAgent()
-episodes = 1000
-loss_history = []
+
+
+# DNN Q-Learning
+#
+#env = GridWorld()
+#agent = DNNQLearningAgent()
+#episodes = 1000
+#loss_history = []
+#for episode in range(episodes):
+#    state = env.reset()
+#    state_array = one_hot(state)
+#    total_loss = 0.0
+#    cnt = 0
+#    done = False
+#    while not done:
+#        action = agent.get_action(state_array)
+#        next_state, reward, done = env.step(action)
+#        next_state_array = one_hot(next_state)
+#        loss = agent.update(state_array, action, reward, next_state_array, done)
+#        total_loss += loss
+#        cnt += 1
+#        state_array = next_state_array
+#    average_loss = total_loss / cnt
+#    loss_history.append(average_loss)
+#    if episode % 100 == 0:
+#        print(f"average_loss = {average_loss}")
+#plt.xlabel('episode')
+#plt.ylabel('loss')
+#plt.plot(range(len(loss_history)), loss_history)
+#plt.show()
+#Q = {}
+#for state in env.states():
+#    for action in env.action_space:
+#        q = agent.qnet(one_hot(state))[0][:, action]
+#        Q[state, action] = float(q.data[0])
+#env.render_q(Q)
+
+
+
+import gymnasium as gym
+
+#env = gym.make("CartPole-v1")
+#state = env.reset()
+#print(state)
+#action_space = env.action_space
+#print(action_space)
+#action = 0
+#next_state, reward, terminated, truncated, info = env.step(action)
+#print(next_state)
+
+
+
+episodes = 300
+sync_interval = 20
+env = gym.make("CartPole-v1")
+agent = DQNAgent()
+reward_history = []
 for episode in range(episodes):
-    state = env.reset()
-    state_array = one_hot(state)
-    total_loss = 0.0
-    cnt = 0
+    state, info = env.reset()
     done = False
+    total_reward = 0.0
     while not done:
-        action = agent.get_action(state_array)
-        next_state, reward, done = env.step(action)
-        next_state_array = one_hot(next_state)
-        loss = agent.update(state_array, action, reward, next_state_array, done)
-        total_loss += loss
-        cnt += 1
-        state_array = next_state_array
-    average_loss = total_loss / cnt
-    loss_history.append(average_loss)
-    if episode % 100 == 0:
-        print(f"average_loss = {average_loss}")
+        action = agent.get_action(state)
+        next_state, reward, terminated, truncated, info = env.step(action)
+        if terminated or truncated:
+            done = True
+        agent.update(state, action, float(reward), next_state, done)
+        state = next_state
+        total_reward += float(reward)
+    if episode % sync_interval == 0:
+        agent.sync_qnet()
+    reward_history.append(total_reward)
+    if episode % 10 == 0:
+        print(f"total_reward = {total_reward}")
 plt.xlabel('episode')
-plt.ylabel('loss')
-plt.plot(range(len(loss_history)), loss_history)
+plt.ylabel('total_reward')
+plt.plot(range(len(reward_history)), reward_history)
 plt.show()
-Q = {}
-for state in env.states():
-    for action in env.action_space:
-        q = agent.qnet(one_hot(state))[0][:, action]
-        Q[state, action] = float(q.data[0])
-env.render_q(Q)
 

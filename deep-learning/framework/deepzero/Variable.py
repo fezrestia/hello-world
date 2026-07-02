@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from types import ModuleType
 
 if TYPE_CHECKING:
@@ -93,7 +93,7 @@ class Variable:
     def __pow__(self: Variable, c: int):
         pass
     # for mypy
-    def __getitem__(self: Variable, slices: slice|tuple[slice|int, ...]) -> Variable:
+    def __getitem__(self: Variable, slices: slice|tuple[slice|int, ...]|Any) -> Variable:
         return self
     # for mypy
     def matmul(self: Variable, x: Variable) -> Variable:

@@ -23,6 +23,7 @@
 ## Additional PKG
 
     $ sudo apt install graphviz
+    $ sudo apt install gymnasium
 
 ## Test
 

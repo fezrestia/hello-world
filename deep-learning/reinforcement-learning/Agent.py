@@ -1,10 +1,14 @@
 import numpy as np
 from collections import defaultdict, deque
+from typing import Any
+import random
+import copy
 
 from deepzero.Variable import Variable
-from deepzero.Optimizer import StochasticGradientDecent
+from deepzero.Optimizer import StochasticGradientDecent, Adam
 from deepzero.Function import as_variable, mean_squared_error
 from deepzero.Type import Array
+from deepzero.Model import Model
 
 from Model import QNet
 
@@ -328,7 +332,7 @@ class DNNQLearningAgent:
         self.epsilon: float = 0.1
         self.action_size: int = 4
 
-        self.qnet: QNet = QNet()
+        self.qnet: QNet = QNet(self.action_size)
 
         self.optimizer: StochasticGradientDecent \
                 = StochasticGradientDecent(self.learning_rate)
@@ -370,4 +374,97 @@ class DNNQLearningAgent:
         self.optimizer.update()
 
         return loss.data
+
+
+
+class ReplayBuffer:
+    def __init__(self, buffer_size: int, batch_size: int) -> None:
+        self.buffer: deque[tuple[Any, int, float, Any, bool]] \
+                = deque(maxlen = buffer_size)
+        self.batch_size: int = batch_size
+
+    def add(
+            self,
+            state: Any,
+            action: int,
+            reward: float,
+            next_state: Any,
+            done: bool,
+    ) -> None:
+        data: tuple[Any, int, float, Any, bool] \
+                = (state, action, reward, next_state, done)
+        self.buffer.append(data)
+
+    def __len__(self):
+        return len(self.buffer)
+
+    def get_batch(self) -> tuple[Array, Array, Array, Array, Array]:
+        data: list[tuple[Any, int, float, Any, bool]] \
+                = random.sample(self.buffer, self.batch_size)
+
+        state: Array = np.stack([x[0] for x in data])
+        action: Array = np.array([x[1] for x in data])
+        reward: Array = np.array([x[2] for x in data])
+        next_state: Array = np.stack([x[3] for x in data])
+        done: Array = np.array([x[4] for x in data]).astype(np.int32)
+
+        return (state, action, reward, next_state, done)
+
+class DQNAgent:
+    def __init__(self) -> None:
+        self.gamma: float = 0.98
+        self.learning_rate: float = 0.0005
+        self.epsilon: float = 0.1
+        self.buffer_size: int = 10000
+        self.batch_size: int = 32
+        self.action_size: int = 2
+
+        self.replay_buffer: ReplayBuffer = ReplayBuffer(self.buffer_size, self.batch_size)
+
+        self.qnet = QNet(self.action_size)
+        self.qnet_target = QNet(self.action_size)
+
+        self.optimizer = Adam(self.learning_rate)
+        self.optimizer.setup(self.qnet)
+
+    def sync_qnet(self) -> None:
+        self.qnet_target = copy.deepcopy(self.qnet)
+
+    def get_action(self, state: Array) -> int:
+        if np.random.rand() < self.epsilon:
+            return np.random.choice(self.action_size)
+        else:
+            b_state: Array = state[np.newaxis, :]
+            (qs,) = self.qnet(as_variable(b_state))
+            return int(qs.data.argmax())
+
+    def update(
+            self,
+            state: Array,
+            action: int,
+            reward: float,
+            next_state: Array,
+            done: bool,
+    ) -> None:
+        self.replay_buffer.add(state, action, reward, next_state, done)
+
+        if len(self.replay_buffer) < self.batch_size:
+            return
+
+        (b_state, b_action, b_reward, b_next_state, b_done) = self.replay_buffer.get_batch()
+
+        (qs,) = self.qnet(as_variable(b_state))
+        q: Variable = qs[np.arange(self.batch_size), b_action]
+
+        (next_qs,) = self.qnet_target(as_variable(b_next_state))
+        next_q: Variable = next_qs.max(axis = 1)
+        next_q.unchain()
+
+        target: Variable = b_reward + (1.0 - b_done) * self.gamma * next_q
+
+        loss: Variable = mean_squared_error(q, target)
+
+        self.qnet.clear_grads()
+        loss.backward()
+        self.optimizer.update()
 

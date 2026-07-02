@@ -7,11 +7,12 @@ from deepzero.Layer import Linear
 from deepzero.Function import relu
 
 class QNet(Model):
-    def __init__(self) -> None:
+    def __init__(self, action_size: int) -> None:
         super().__init__()
 
-        self.l1: Linear = Linear(100)
-        self.l2: Linear = Linear(4)
+        self.l1: Linear = Linear(128)
+        self.l2: Linear = Linear(128)
+        self.l3: Linear = Linear(action_size)
 
     @override
     def forward(self, *inputs: Variable) -> tuple[Variable, ...]:
@@ -20,5 +21,7 @@ class QNet(Model):
         (x,) = self.l1(x)
         x = relu(x)
         (x,) = self.l2(x)
+        x = relu(x)
+        (x,) = self.l3(x)
         return (x,)
 

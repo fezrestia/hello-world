@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from typing import override
+from typing import override, Any
 from types import ModuleType
 import numpy as np
 from numpy.typing import DTypeLike
@@ -827,8 +827,8 @@ def dropout(x: Variable, dropout_ratio: float = 0.5) -> Variable:
 
 
 class GetItem(Function):
-    def __init__(self, slices: slice|tuple[slice|int, ...]) -> None:
-        self.slices: slice|tuple[slice|int, ...] = slices
+    def __init__(self, slices: slice|tuple[slice|int, ...]|Any) -> None:
+        self.slices: slice|tuple[slice|int, ...]|Any = slices
 
     @override
     def forward(self, xs: tuple[Array, ...]) -> tuple[Array, ...]:
@@ -843,17 +843,17 @@ class GetItem(Function):
         gx: Variable = get_item_grad(gy, self.slices, x.shape)
         return (gx,)
 
-def get_item(x: Variable, slices: slice|tuple[slice|int, ...]) -> Variable:
+def get_item(x: Variable, slices: slice|tuple[slice|int, ...]|Any) -> Variable:
     return GetItem(slices)(x)[0]
 
 
 class GetItemGrad(Function):
     def __init__(
             self,
-            slices: slice|tuple[slice|int, ...],
+            slices: slice|tuple[slice|int, ...]|Any,
             original_shape: tuple[int, ...],
     ) -> None:
-        self.slices: slice|tuple[slice|int, ...] = slices
+        self.slices: slice|tuple[slice|int, ...]|Any = slices
         self.original_shape: tuple[int, ...] = original_shape
 
     @override
@@ -873,7 +873,7 @@ class GetItemGrad(Function):
 
 def get_item_grad(
         gy: Variable,
-        slices: slice|tuple[slice|int, ...],
+        slices: slice|tuple[slice|int, ...]|Any,
         original_shape: tuple[int, ...],
 ) -> Variable:
     return GetItemGrad(slices, original_shape)(gy)[0]
