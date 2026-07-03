@@ -390,7 +390,7 @@ from deepzero import Parameter
 from deepzero import Function
 from deepzero import use_config, no_grad, test_mode
 from deepzero import Visualize
-from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, sin, cos, tanh, sum, reshape, transpose, matmul, linear, sigmoid, mean_squared_error, as_variable, get_item, softmax, softmax_cross_entropy, accuracy, relu, dropout, img2col, col2img, conv2d, deconv2d, pooling, as_array
+from deepzero.Function import add, mul, sub, rsub, div, rdiv, neg, pow, sin, cos, tanh, sum, reshape, transpose, matmul, linear, sigmoid, mean_squared_error, as_variable, get_item, softmax, softmax_cross_entropy, accuracy, relu, dropout, img2col, col2img, conv2d, deconv2d, pooling, as_array, log
 from deepzero import Layer
 from deepzero.Layer import Linear, RNN, LSTM
 from deepzero import Model
@@ -488,30 +488,263 @@ import gymnasium as gym
 
 
 
-episodes = 300
-sync_interval = 20
+# DQN
+#
+#episodes = 300
+#sync_interval = 20
+#env = gym.make("CartPole-v1")
+#agent = DQNAgent()
+#reward_history = []
+#for episode in range(episodes):
+#    state, info = env.reset()
+#    done = False
+#    total_reward = 0.0
+#    while not done:
+#        action = agent.get_action(state)
+#        next_state, reward, terminated, truncated, info = env.step(action)
+#        if terminated or truncated:
+#            done = True
+#        agent.update(state, action, float(reward), next_state, done)
+#        state = next_state
+#        total_reward += float(reward)
+#    if episode % sync_interval == 0:
+#        agent.sync_qnet()
+#    reward_history.append(total_reward)
+#    if episode % 10 == 0:
+#        print(f"total_reward = {total_reward}")
+#plt.xlabel('episode')
+#plt.ylabel('total_reward')
+#plt.plot(range(len(reward_history)), reward_history)
+#plt.show()
+
+
+
+class Policy(Model):
+    def __init__(self, action_size: int) -> None:
+        super().__init__()
+
+        self.l1: Linear = Linear(128)
+        self.l2: Linear = Linear(action_size)
+
+    @override
+    def forward(self, *inputs: Variable) -> tuple[Variable, ...]:
+        x: Variable = inputs[0]
+
+        (x,) = self.l1(x)
+        x = relu(x)
+        (x,) = self.l2(x)
+        x = softmax(x)
+
+        return (x,)
+
+class PolicyBasedAgent:
+    def __init__(self) -> None:
+        self.gamma: float = 0.98
+        self.learning_rate: float = 0.0002
+        self.action_size: int = 2
+
+        self.memory: list[tuple[float, Variable]] = []
+
+        self.pi: Policy = Policy(self.action_size)
+        self.optimizer = Adam(self.learning_rate)
+        self.optimizer.setup(self.pi)
+
+    def get_action(self, state: Array) -> tuple[int, Array]:
+        state = state[np.newaxis, :]  # for batch axis
+
+        probs: Variable
+        (probs,) = self.pi(as_variable(state))
+
+        one_prob: Variable = probs[0]
+
+        action: int = np.random.choice(len(one_prob), p = one_prob.data)
+
+        return action, one_prob[action]
+
+    def add(self, reward: float, prob: Variable) -> None:
+        data: tuple[float, Variable] = (reward, prob)
+        self.memory.append(data)
+
+    def update(self) -> None:
+        self.pi.clear_grads()
+
+        G: float = 0.0
+        loss: Variable = Variable(as_array(0.0))
+
+
+        # REINFORCE, use G immediately. total G icludes total timeline.
+        for reward, prob in reversed(self.memory):
+            G = reward + self.gamma * G
+            loss += -log(prob) * G
+
+        #for reward, prob in reversed(self.memory):
+        #    G = reward + self.gamma * G
+        #for reward, prob in self.memory:
+        #    loss += -log(prob) * G
+
+        loss.backward()
+        self.optimizer.update()
+        self.memory = []
+
+
+
+#env = gym.make("CartPole-v1")
+#state, info = env.reset()
+#agent = PolicyBasedAgent()
+#print(f"state = {state}")
+#action, prob = agent.get_action(state)
+#print(f"action = {action}")
+#print(f"prob = {prob}")
+#G = 100.0
+#J = G * log(as_variable(prob))
+#print(f"J = {J}")
+#J.backward(keep_grad = True)
+#print(f"J.grad = {J.grad}")
+
+
+
+#episodes = 3000
+#env = gym.make("CartPole-v1")
+#agent = PolicyBasedAgent()
+#reward_history = []
+#for episode in range(episodes):
+#    state, info = env.reset()
+#    done = False
+#    total_reward = 0.0
+#    while not done:
+#        action, prob = agent.get_action(state)
+#        next_state, reward, terminated, truncated, info = env.step(action)
+#        if terminated or truncated:
+#            done = True
+#        agent.add(float(reward), as_variable(prob))
+#        state = next_state
+#        total_reward += float(reward)
+#    agent.update()
+#    reward_history.append(total_reward)
+#    if episode % 100 == 0:
+#        print(f"total_reward = {total_reward}")
+#plt.xlabel('episode')
+#plt.ylabel('total_reward')
+#plt.plot(range(len(reward_history)), reward_history)
+#plt.show()
+
+
+
+class PolicyNet(Model):
+    def __init__(self, action_size: int = 2) -> None:
+        super().__init__()
+        self.l1: Linear = Linear(128)
+        self.l2: Linear = Linear(action_size)
+
+    @override
+    def forward(self, *inputs: Variable) -> tuple[Variable, ...]:
+        x: Variable = inputs[0]
+
+        (x,) = self.l1(x)
+        x = relu(x)
+        (x,) = self.l2(x)
+        x = softmax(x)
+
+        return (x,)
+
+class ValueNet(Model):
+    def __init__(self) -> None:
+        super().__init__()
+        self.l1: Linear = Linear(128)
+        self.l2: Linear = Linear(1)
+
+    @override
+    def forward(self, *inputs: Variable) -> tuple[Variable, ...]:
+        x: Variable = inputs[0]
+
+        (x,) = self.l1(x)
+        x = relu(x)
+        (x,) = self.l2(x)
+
+        return (x,)
+
+class ActorCriticAgent:
+    def __init__(self) -> None:
+        self.gamma: float = 0.98
+        self.learning_rate_pi: float = 0.0002
+        self.learning_rate_v: float = 0.0005
+        self.action_size: int = 2
+
+        self.pi: PolicyNet = PolicyNet(self.action_size)
+        self.v: ValueNet = ValueNet()
+
+        self.optimizer_pi = Adam(self.learning_rate_pi).setup(self.pi)
+        self.optimizer_v = Adam(self.learning_rate_v).setup(self.v)
+
+    def get_action(self, state: Array) -> tuple[int, Array]:
+        state = state[np.newaxis, :]  # for batch axis
+
+        probs: Variable
+        (probs,) = self.pi(as_variable(state))
+
+        one_prob: Variable = probs[0]
+
+        action: int = np.random.choice(len(one_prob), p = one_prob.data)
+
+        return action, one_prob[action]
+
+    def update(
+            self,
+            state: Array,
+            action_prob: Array,
+            reward: float,
+            next_state: Array,
+            done: bool,
+    ) -> None:
+        # add batch axis
+        state = state[np.newaxis, :]
+        next_state = next_state[np.newaxis, :]
+
+
+        # for Value
+        target: Variable = reward + self.gamma * self.v(as_variable(next_state))[0] * (1.0 - done)
+        target.unchain()
+        v: Variable = self.v(as_variable(state))[0]
+        loss_v: Variable = mean_squared_error(v, target)
+
+
+        # for Policy
+        delta: Variable = target - v
+        delta.unchain()
+        loss_pi: Variable = -log(as_variable(action_prob)) * delta
+
+
+        self.v.clear_grads()
+        self.pi.clear_grads()
+        loss_v.backward()
+        loss_pi.backward()
+        self.optimizer_v.update()
+        self.optimizer_pi.update()
+
+
+
+episodes = 3000
 env = gym.make("CartPole-v1")
-agent = DQNAgent()
+agent = ActorCriticAgent()
 reward_history = []
 for episode in range(episodes):
     state, info = env.reset()
     done = False
     total_reward = 0.0
     while not done:
-        action = agent.get_action(state)
+        action, prob = agent.get_action(state)
         next_state, reward, terminated, truncated, info = env.step(action)
         if terminated or truncated:
             done = True
-        agent.update(state, action, float(reward), next_state, done)
+        agent.update(state, prob, float(reward), next_state, done)
         state = next_state
         total_reward += float(reward)
-    if episode % sync_interval == 0:
-        agent.sync_qnet()
     reward_history.append(total_reward)
-    if episode % 10 == 0:
+    if episode % 100 == 0:
         print(f"total_reward = {total_reward}")
 plt.xlabel('episode')
 plt.ylabel('total_reward')
 plt.plot(range(len(reward_history)), reward_history)
 plt.show()
+
 
