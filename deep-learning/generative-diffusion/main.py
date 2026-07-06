@@ -9,6 +9,8 @@ from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+np.random.seed(0)
+
 
 
 ## Gaus Distribution
@@ -166,5 +168,110 @@ ax.plot_surface(X, Y, Z, cmap = "viridis")
 ax.set_xlabel("x")
 ax.set_ylabel("y")
 ax.set_zlabel("z")
+plt.show()
+
+
+
+xs = np.arange(-2, 2, 0.1)
+ys = np.arange(-2, 2, 0.1)
+X, Y = np.meshgrid(xs, ys)
+Z = X ** 2 + Y ** 2
+
+ax2: Any = plt.axes(projection = "3d")
+ax2.plot_surface(X, Y, Z, cmap = "viridis")
+ax2.set_xlabel("x")
+ax2.set_ylabel("y")
+ax2.set_zlabel("z")
+plt.show()
+
+ax3 = plt.axes()
+ax3.contour(X, Y, Z)
+ax3.set_xlabel("x")
+ax3.set_ylabel("y")
+plt.show()
+
+
+
+mu = np.array([0.5, -0.2])
+cov = np.array([[2.0, 0.3],
+                [0.3, 0.5]])
+
+xs = ys = np.arange(-5, 5, 0.1)
+X, Y = np.meshgrid(xs, ys)
+Z = np.zeros_like(X)
+
+for i in range(X.shape[0]):
+    for j in range(X.shape[1]):
+        x = np.array([X[i, j], Y[i, j]])
+        Z[i, j] = multi_dim_normal(x, mu, cov)
+
+fig = plt.figure()
+f1: Any = fig.add_subplot(1, 2, 1, projection = "3d")
+f1.set_xlabel("x")
+f1.set_ylabel("y")
+f1.set_zlabel("z")
+f1.plot_surface(X, Y, Z, cmap = "viridis")
+f2 = fig.add_subplot(1, 2, 2)
+f2.set_xlabel("x")
+f2.set_ylabel("y")
+f2.contour(X, Y, Z)
+plt.show()
+
+
+
+N = 10000
+D = 2
+xs = np.random.rand(N, D)
+
+mu = np.sum(xs, axis = 0)
+mu /= N
+
+cov = np.zeros((D, D))
+
+for n in range(N):
+    x = xs[n]
+    z = x - mu
+    z = z[:, np.newaxis]
+    cov += z @ z.T
+
+cov /= N
+
+print(f"mu = {mu}, cov = {cov}")
+
+
+
+path = os.path.join(SCRIPT_DIR, "dataset/height_weight.txt")
+xs = np.loadtxt(path)
+print(f"xs.shape = {xs.shape}")
+
+small_xs = xs[:500]
+plt.scatter(small_xs[:, 0], small_xs[:, 1])
+plt.xlabel("Height[cm]")
+plt.ylabel("Weight[kg]")
+plt.show()
+
+mu = np.mean(xs, axis = 0)
+cov = np.cov(xs, rowvar = False)
+
+X, Y = np.meshgrid(np.arange(150, 195, 0.5),
+                   np.arange(45, 75, 0.5))
+Z = np.zeros_like(X)
+
+for i in range(X.shape[0]):
+    for j in range(X.shape[1]):
+        x = np.array([X[i, j], Y[i, j]])
+        Z[i, j] = multi_dim_normal(x, mu, cov)
+
+fig = plt.figure()
+f3: Any = fig.add_subplot(1, 2, 1, projection = "3d")
+f3.set_xlabel("x")
+f3.set_ylabel("y")
+f3.set_zlabel("z")
+f3.plot_surface(X, Y, Z, cmap = "viridis")
+f4 = fig.add_subplot(1, 2, 2)
+f4.scatter(small_xs[:, 0], small_xs[:, 1])
+f4.set_xlabel("x")
+f4.set_ylabel("y")
+f4.contour(X, Y, Z)
 plt.show()
 
