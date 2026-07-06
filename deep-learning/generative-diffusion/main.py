@@ -151,127 +151,166 @@ def multi_dim_normal(xs: np.ndarray, mu: np.ndarray, cov: np.ndarray) -> np.ndar
 
 
 
-X = np.array([[-2, -1, 0, 1, 2],
-              [-2, -1, 0, 1, 2],
-              [-2, -1, 0, 1, 2],
-              [-2, -1, 0, 1, 2],
-              [-2, -1, 0, 1, 2]])
-Y = np.array([[-2, -2, -2, -2, -2],
-              [-1, -1, -1, -1, -1],
-              [0, 0, 0, 0, 0],
-              [1, 1, 1, 1, 1],
-              [2, 2, 2, 2, 2]])
-Z = X ** 2 + Y ** 2
+#X = np.array([[-2, -1, 0, 1, 2],
+#              [-2, -1, 0, 1, 2],
+#              [-2, -1, 0, 1, 2],
+#              [-2, -1, 0, 1, 2],
+#              [-2, -1, 0, 1, 2]])
+#Y = np.array([[-2, -2, -2, -2, -2],
+#              [-1, -1, -1, -1, -1],
+#              [0, 0, 0, 0, 0],
+#              [1, 1, 1, 1, 1],
+#              [2, 2, 2, 2, 2]])
+#Z = X ** 2 + Y ** 2
+#
+#ax: Any = plt.axes(projection = "3d")
+#ax.plot_surface(X, Y, Z, cmap = "viridis")
+#ax.set_xlabel("x")
+#ax.set_ylabel("y")
+#ax.set_zlabel("z")
+#plt.show()
+#
+#
+#
+#xs = np.arange(-2, 2, 0.1)
+#ys = np.arange(-2, 2, 0.1)
+#X, Y = np.meshgrid(xs, ys)
+#Z = X ** 2 + Y ** 2
+#
+#ax2: Any = plt.axes(projection = "3d")
+#ax2.plot_surface(X, Y, Z, cmap = "viridis")
+#ax2.set_xlabel("x")
+#ax2.set_ylabel("y")
+#ax2.set_zlabel("z")
+#plt.show()
+#
+#ax3 = plt.axes()
+#ax3.contour(X, Y, Z)
+#ax3.set_xlabel("x")
+#ax3.set_ylabel("y")
+#plt.show()
+#
+#
+#
+#mu = np.array([0.5, -0.2])
+#cov = np.array([[2.0, 0.3],
+#                [0.3, 0.5]])
+#
+#xs = ys = np.arange(-5, 5, 0.1)
+#X, Y = np.meshgrid(xs, ys)
+#Z = np.zeros_like(X)
+#
+#for i in range(X.shape[0]):
+#    for j in range(X.shape[1]):
+#        x = np.array([X[i, j], Y[i, j]])
+#        Z[i, j] = multi_dim_normal(x, mu, cov)
+#
+#fig = plt.figure()
+#f1: Any = fig.add_subplot(1, 2, 1, projection = "3d")
+#f1.set_xlabel("x")
+#f1.set_ylabel("y")
+#f1.set_zlabel("z")
+#f1.plot_surface(X, Y, Z, cmap = "viridis")
+#f2 = fig.add_subplot(1, 2, 2)
+#f2.set_xlabel("x")
+#f2.set_ylabel("y")
+#f2.contour(X, Y, Z)
+#plt.show()
+#
+#
+#
+#N = 10000
+#D = 2
+#xs = np.random.rand(N, D)
+#
+#mu = np.sum(xs, axis = 0)
+#mu /= N
+#
+#cov = np.zeros((D, D))
+#
+#for n in range(N):
+#    x = xs[n]
+#    z = x - mu
+#    z = z[:, np.newaxis]
+#    cov += z @ z.T
+#
+#cov /= N
+#
+#print(f"mu = {mu}, cov = {cov}")
+#
+#
+#
+#path = os.path.join(SCRIPT_DIR, "dataset/height_weight.txt")
+#xs = np.loadtxt(path)
+#print(f"xs.shape = {xs.shape}")
+#
+#small_xs = xs[:500]
+#plt.scatter(small_xs[:, 0], small_xs[:, 1])
+#plt.xlabel("Height[cm]")
+#plt.ylabel("Weight[kg]")
+#plt.show()
+#
+#mu = np.mean(xs, axis = 0)
+#cov = np.cov(xs, rowvar = False)
+#
+#X, Y = np.meshgrid(np.arange(150, 195, 0.5),
+#                   np.arange(45, 75, 0.5))
+#Z = np.zeros_like(X)
+#
+#for i in range(X.shape[0]):
+#    for j in range(X.shape[1]):
+#        x = np.array([X[i, j], Y[i, j]])
+#        Z[i, j] = multi_dim_normal(x, mu, cov)
+#
+#fig = plt.figure()
+#f3: Any = fig.add_subplot(1, 2, 1, projection = "3d")
+#f3.set_xlabel("x")
+#f3.set_ylabel("y")
+#f3.set_zlabel("z")
+#f3.plot_surface(X, Y, Z, cmap = "viridis")
+#f4 = fig.add_subplot(1, 2, 2)
+#f4.scatter(small_xs[:, 0], small_xs[:, 1])
+#f4.set_xlabel("x")
+#f4.set_ylabel("y")
+#f4.contour(X, Y, Z)
+#plt.show()
 
-ax: Any = plt.axes(projection = "3d")
-ax.plot_surface(X, Y, Z, cmap = "viridis")
-ax.set_xlabel("x")
-ax.set_ylabel("y")
-ax.set_zlabel("z")
-plt.show()
 
 
+# Gausian Mixture Model
 
-xs = np.arange(-2, 2, 0.1)
-ys = np.arange(-2, 2, 0.1)
-X, Y = np.meshgrid(xs, ys)
-Z = X ** 2 + Y ** 2
-
-ax2: Any = plt.axes(projection = "3d")
-ax2.plot_surface(X, Y, Z, cmap = "viridis")
-ax2.set_xlabel("x")
-ax2.set_ylabel("y")
-ax2.set_zlabel("z")
-plt.show()
-
-ax3 = plt.axes()
-ax3.contour(X, Y, Z)
-ax3.set_xlabel("x")
-ax3.set_ylabel("y")
-plt.show()
-
-
-
-mu = np.array([0.5, -0.2])
-cov = np.array([[2.0, 0.3],
-                [0.3, 0.5]])
-
-xs = ys = np.arange(-5, 5, 0.1)
-X, Y = np.meshgrid(xs, ys)
-Z = np.zeros_like(X)
-
-for i in range(X.shape[0]):
-    for j in range(X.shape[1]):
-        x = np.array([X[i, j], Y[i, j]])
-        Z[i, j] = multi_dim_normal(x, mu, cov)
-
-fig = plt.figure()
-f1: Any = fig.add_subplot(1, 2, 1, projection = "3d")
-f1.set_xlabel("x")
-f1.set_ylabel("y")
-f1.set_zlabel("z")
-f1.plot_surface(X, Y, Z, cmap = "viridis")
-f2 = fig.add_subplot(1, 2, 2)
-f2.set_xlabel("x")
-f2.set_ylabel("y")
-f2.contour(X, Y, Z)
-plt.show()
-
-
-
-N = 10000
-D = 2
-xs = np.random.rand(N, D)
-
-mu = np.sum(xs, axis = 0)
-mu /= N
-
-cov = np.zeros((D, D))
-
-for n in range(N):
-    x = xs[n]
-    z = x - mu
-    z = z[:, np.newaxis]
-    cov += z @ z.T
-
-cov /= N
-
-print(f"mu = {mu}, cov = {cov}")
-
-
-
-path = os.path.join(SCRIPT_DIR, "dataset/height_weight.txt")
+path = os.path.join(SCRIPT_DIR, "dataset/old_faithful.txt")
 xs = np.loadtxt(path)
 print(f"xs.shape = {xs.shape}")
+print(f"xs[0] = {xs[0]}")
 
-small_xs = xs[:500]
-plt.scatter(small_xs[:, 0], small_xs[:, 1])
-plt.xlabel("Height[cm]")
-plt.ylabel("Weight[kg]")
+plt.scatter(xs[:, 0], xs[:, 1])
+plt.xlabel("eruptions[min]")
+plt.ylabel("waiting[min]")
 plt.show()
 
-mu = np.mean(xs, axis = 0)
-cov = np.cov(xs, rowvar = False)
 
-X, Y = np.meshgrid(np.arange(150, 195, 0.5),
-                   np.arange(45, 75, 0.5))
-Z = np.zeros_like(X)
+mus = np.array([[2.0, 54.50],
+                [4.3, 80.0]])
+covs = np.array([[[0.07, 0.44],
+                  [0.44, 33.7]],
+                 [[0.17, 0.94],
+                  [0.94, 36.0]]])
+phis = np.array([0.35, 0.65])
 
-for i in range(X.shape[0]):
-    for j in range(X.shape[1]):
-        x = np.array([X[i, j], Y[i, j]])
-        Z[i, j] = multi_dim_normal(x, mu, cov)
+def sample() -> np.ndarray:
+    z = np.random.choice(2, p = phis)
+    mu, cov = mus[z], covs[z]
+    x = np.random.multivariate_normal(mu, cov)
+    return x
 
-fig = plt.figure()
-f3: Any = fig.add_subplot(1, 2, 1, projection = "3d")
-f3.set_xlabel("x")
-f3.set_ylabel("y")
-f3.set_zlabel("z")
-f3.plot_surface(X, Y, Z, cmap = "viridis")
-f4 = fig.add_subplot(1, 2, 2)
-f4.scatter(small_xs[:, 0], small_xs[:, 1])
-f4.set_xlabel("x")
-f4.set_ylabel("y")
-f4.contour(X, Y, Z)
+N = 500
+xs = np.zeros((N, 2))
+for i in range(N):
+    xs[i] = sample()
+
+plt.scatter(xs[:, 0], xs[:, 1], color = "orange", alpha = 0.7)
+plt.xlabel("x")
+plt.ylabel("y")
 plt.show()
 
