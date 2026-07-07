@@ -279,38 +279,94 @@ def multi_dim_normal(xs: np.ndarray, mu: np.ndarray, cov: np.ndarray) -> np.ndar
 
 # Gausian Mixture Model
 
-path = os.path.join(SCRIPT_DIR, "dataset/old_faithful.txt")
-xs = np.loadtxt(path)
-print(f"xs.shape = {xs.shape}")
-print(f"xs[0] = {xs[0]}")
+#path = os.path.join(SCRIPT_DIR, "dataset/old_faithful.txt")
+#xs = np.loadtxt(path)
+#print(f"xs.shape = {xs.shape}")
+#print(f"xs[0] = {xs[0]}")
+#
+#plt.scatter(xs[:, 0], xs[:, 1])
+#plt.xlabel("eruptions[min]")
+#plt.ylabel("waiting[min]")
+#plt.show()
+#
+#
+#mus = np.array([[2.0, 54.50],
+#                [4.3, 80.0]])
+#covs = np.array([[[0.07, 0.44],
+#                  [0.44, 33.7]],
+#                 [[0.17, 0.94],
+#                  [0.94, 36.0]]])
+#phis = np.array([0.35, 0.65])
+#
+#def sample() -> np.ndarray:
+#    z = np.random.choice(2, p = phis)
+#    mu, cov = mus[z], covs[z]
+#    x = np.random.multivariate_normal(mu, cov)
+#    return x
+#
+#N = 500
+#xs = np.zeros((N, 2))
+#for i in range(N):
+#    xs[i] = sample()
+#
+#plt.scatter(xs[:, 0], xs[:, 1], color = "orange", alpha = 0.7)
+#plt.xlabel("x")
+#plt.ylabel("y")
+#plt.show()
 
-plt.scatter(xs[:, 0], xs[:, 1])
-plt.xlabel("eruptions[min]")
-plt.ylabel("waiting[min]")
-plt.show()
+
+
+def gmm(
+        xs: np.ndarray,
+        phis: np.ndarray,
+        mus: np.ndarray,
+        covs: np.ndarray,
+) -> np.ndarray:
+    K: int = len(phis)
+
+    ys: np.ndarray = np.zeros((K,))
+
+    for k in range(K):
+        phi: np.ndarray = phis[k]
+        mu: np.ndarray = mus[k]
+        cov: np.ndarray = covs[k]
+
+        ys += phi * multi_dim_normal(xs, mu, cov)
+
+    return ys
+
 
 
 mus = np.array([[2.0, 54.50],
                 [4.3, 80.0]])
+
 covs = np.array([[[0.07, 0.44],
                   [0.44, 33.7]],
                  [[0.17, 0.94],
-                  [0.94, 36.0]]])
-phis = np.array([0.35, 0.65])
+                  [0.94, 36.00]]])
 
-def sample() -> np.ndarray:
-    z = np.random.choice(2, p = phis)
-    mu, cov = mus[z], covs[z]
-    x = np.random.multivariate_normal(mu, cov)
-    return x
+phis = np.array([0.35, 36.00])
 
-N = 500
-xs = np.zeros((N, 2))
-for i in range(N):
-    xs[i] = sample()
+xs = np.arange(1, 6, 0.1)
+ys = np.arange(40, 100, 0.1)
+X, Y = np.meshgrid(xs, ys)
+Z = np.zeros_like(X)
 
-plt.scatter(xs[:, 0], xs[:, 1], color = "orange", alpha = 0.7)
-plt.xlabel("x")
-plt.ylabel("y")
+for i in range(X.shape[0]):
+    for j in range(X.shape[1]):
+        x = np.array([X[i, j], Y[i, j]])
+        Z[i, j] = gmm(x, phis, mus, covs)
+
+fig = plt.figure()
+ax1: Any = fig.add_subplot(1, 2, 1, projection = "3d")
+ax1.set_xlabel("x")
+ax1.set_ylabel("y")
+ax1.set_zlabel("z")
+ax1.plot_surface(X, Y, Z, cmap = "viridis")
+ax2 = fig.add_subplot(1, 2, 2)
+ax2.set_xlabel("x")
+ax2.set_ylabel("y")
+ax2.contour(X, Y, Z)
 plt.show()
+
 
