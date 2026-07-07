@@ -316,6 +316,14 @@ def multi_dim_normal(xs: np.ndarray, mu: np.ndarray, cov: np.ndarray) -> np.ndar
 
 
 
+# D: input dim
+# P: phi size (count of normal distribution)
+#
+# xs: (D,)
+# phis: (P,)
+# mus: (D,)
+# covs: (D, D)
+# return: scalar
 def gmm(
         xs: np.ndarray,
         phis: np.ndarray,
@@ -324,16 +332,20 @@ def gmm(
 ) -> np.ndarray:
     K: int = len(phis)
 
-    ys: np.ndarray = np.zeros((K,))
+    # y: scalar
+    y: np.ndarray = np.array(0.0)
 
     for k in range(K):
+        # phi: scalar
+        # mu: (D,)
+        # cov: (D, D)
         phi: np.ndarray = phis[k]
         mu: np.ndarray = mus[k]
         cov: np.ndarray = covs[k]
 
-        ys += phi * multi_dim_normal(xs, mu, cov)
+        y += phi * multi_dim_normal(xs, mu, cov)
 
-    return ys
+    return y
 
 
 
@@ -345,7 +357,7 @@ covs = np.array([[[0.07, 0.44],
                  [[0.17, 0.94],
                   [0.94, 36.00]]])
 
-phis = np.array([0.35, 36.00])
+phis = np.array([0.35, 0.65])
 
 xs = np.arange(1, 6, 0.1)
 ys = np.arange(40, 100, 0.1)
@@ -368,5 +380,4 @@ ax2.set_xlabel("x")
 ax2.set_ylabel("y")
 ax2.contour(X, Y, Z)
 plt.show()
-
 
