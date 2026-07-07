@@ -349,35 +349,157 @@ def gmm(
 
 
 
-mus = np.array([[2.0, 54.50],
-                [4.3, 80.0]])
+#mus = np.array([[2.0, 54.50],
+#                [4.3, 80.0]])
+#
+#covs = np.array([[[0.07, 0.44],
+#                  [0.44, 33.7]],
+#                 [[0.17, 0.94],
+#                  [0.94, 36.00]]])
+#
+#phis = np.array([0.35, 0.65])
+#
+#xs = np.arange(1, 6, 0.1)
+#ys = np.arange(40, 100, 0.1)
+#X, Y = np.meshgrid(xs, ys)
+#Z = np.zeros_like(X)
+#
+#for i in range(X.shape[0]):
+#    for j in range(X.shape[1]):
+#        x = np.array([X[i, j], Y[i, j]])
+#        Z[i, j] = gmm(x, phis, mus, covs)
+#
+#fig = plt.figure()
+#ax1: Any = fig.add_subplot(1, 2, 1, projection = "3d")
+#ax1.set_xlabel("x")
+#ax1.set_ylabel("y")
+#ax1.set_zlabel("z")
+#ax1.plot_surface(X, Y, Z, cmap = "viridis")
+#ax2 = fig.add_subplot(1, 2, 2)
+#ax2.set_xlabel("x")
+#ax2.set_ylabel("y")
+#ax2.contour(X, Y, Z)
+#plt.show()
 
-covs = np.array([[[0.07, 0.44],
-                  [0.44, 33.7]],
-                 [[0.17, 0.94],
-                  [0.94, 36.00]]])
 
-phis = np.array([0.35, 0.65])
 
-xs = np.arange(1, 6, 0.1)
-ys = np.arange(40, 100, 0.1)
-X, Y = np.meshgrid(xs, ys)
-Z = np.zeros_like(X)
+# Estimation-Maximization Algorithm
 
-for i in range(X.shape[0]):
-    for j in range(X.shape[1]):
-        x = np.array([X[i, j], Y[i, j]])
-        Z[i, j] = gmm(x, phis, mus, covs)
+path = os.path.join(SCRIPT_DIR, "dataset/old_faithful.txt")
+xs = np.loadtxt(path)
+print(f"old_faithful : xs.shape = {xs.shape}")
 
-fig = plt.figure()
-ax1: Any = fig.add_subplot(1, 2, 1, projection = "3d")
-ax1.set_xlabel("x")
-ax1.set_ylabel("y")
-ax1.set_zlabel("z")
-ax1.plot_surface(X, Y, Z, cmap = "viridis")
-ax2 = fig.add_subplot(1, 2, 2)
-ax2.set_xlabel("x")
-ax2.set_ylabel("y")
-ax2.contour(X, Y, Z)
+phis = np.array([0.5, 0.5])
+mus = np.array([[0.0, 50.0],
+                [0.0, 100.0]])
+covs = np.array([np.eye(2), np.eye(2)])  # identity matrix
+
+K = len(phis)  # 2
+N = len(xs)  # 272
+MAX_ITERS = 100
+THRESHOLD = 1e-4
+
+
+
+# xs : (D,)
+# phis : (N,)
+# mus: (D,)
+# covs: (D, D)
+# return : scalar
+def likelihood(
+        xs: np.ndarray,
+        phis: np.ndarray,
+        mus: np.ndarray,
+        covs: np.ndarray,
+) -> np.ndarray:
+    eps: float = 1e-8
+    L: np.ndarray = np.array(0.0)
+    N: int = len(xs)
+
+    for x in xs:
+        y: np.ndarray = gmm(x, phis, mus, covs)
+        L += np.log(y + eps)
+
+    return L / N
+
+
+
+current_likelihood = likelihood(xs, phis, mus, covs)
+
+for iter in range(MAX_ITERS):
+    # E step
+    qs = np.zeros((N, K))  # N: data dimens, K: phi len
+    for n in range(N):
+        x = xs[n]
+        for k in range(K):
+            phi = phis[k]
+            mu = mus[k]
+            cov = covs[k]
+
+            qs[n, k] = phi * multi_dim_normal(x, mu, cov)
+        qs[n] /= gmm(x, phis, mus, covs)
+
+    # M step
+    qs_sum = qs.sum(axis = 0)
+    for k in range(K):
+        # phi
+        phis[k] = qs_sum[k] / N
+
+        # mu
+        c = 0
+        for n in range(N):
+            c += qs[n, k] * xs[n]
+        mus[k] = c / qs_sum[k]
+
+        # cov
+        c = 0
+        for n in range(N):
+            z = xs[n] - mus[k]
+            z = z[:, np.newaxis]
+            c += qs[n, k] * z @ z.T
+        covs[k] = c / qs_sum[k]
+
+    # converged or not
+    print(f"current_likelihood = {current_likelihood:.3f}")
+
+    next_likelihood = likelihood(xs, phis, mus, covs)
+
+    diff = np.abs(next_likelihood - current_likelihood)
+    if diff < THRESHOLD:
+        break
+
+    current_likelihood = next_likelihood
+
+
+N = 500
+new_xs = np.zeros((N, 2))
+for n in range(N):
+    k = np.random.choice(2, p = phis)
+    mu = mus[k]
+    cov = covs[k]
+    new_xs[n] = np.random.multivariate_normal(mu, cov)
+
+
+# visualize
+def plot_contour(w, mus, covs):
+    x = np.arange(1, 6, 0.1)
+    y = np.arange(40, 100, 1)
+    X, Y = np.meshgrid(x, y)
+    Z = np.zeros_like(X)
+
+    for i in range(X.shape[0]):
+        for j in range(X.shape[1]):
+            x = np.array([X[i, j], Y[i, j]])
+
+            for k in range(len(mus)):
+                mu, cov = mus[k], covs[k]
+                Z[i, j] += w[k] * multi_dim_normal(x, mu, cov)
+    plt.contour(X, Y, Z)
+
+plt.scatter(xs[:,0], xs[:,1], alpha = 0.7, label ="original")
+plt.scatter(new_xs[:,0], new_xs[:,1], alpha = 0.7, label = "generated")
+plot_contour(phis, mus, covs)
+plt.xlabel("eruptions[min])")
+plt.ylabel("waiting[min]")
 plt.show()
 
