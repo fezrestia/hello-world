@@ -9,8 +9,10 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
+from torch import Tensor
 import torchvision  # type: ignore[import-untyped]
-import torchvision.transforms as transforms  # type: ignore[import-untyped]
+from torchvision import datasets, transforms  # type: ignore[import-untyped]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -647,67 +649,170 @@ def mean_squared_error(x0, x1):
 #    optimizer.zero_grad()
 
 
-x = torch.rand(100, 1)
-y = torch.sin(2 * torch.pi * x) + torch.rand(100, 1)
+#x = torch.rand(100, 1)
+#y = torch.sin(2 * torch.pi * x) + torch.rand(100, 1)
+#
+#class Model(nn.Module):
+#    def __init__(self, input_size = 1, hidden_size = 10, output_size = 1):
+#        super().__init__()
+#
+#        self.linear1 = nn.Linear(input_size, hidden_size)
+#        self.linear2 = nn.Linear(hidden_size, output_size)
+#
+#    def forward(self, x):
+#        y = self.linear1(x)
+#        y = F.sigmoid(y)
+#        y = self.linear2(y)
+#        return y
+#
+#lr = 0.2
+#iters = 10000
+#
+#model = Model()
+#optimizer = torch.optim.SGD(model.parameters(), lr = lr)
+#
+#for i in range(iters):
+#    y_pred = model(x)
+#    loss = F.mse_loss(y, y_pred)
+#
+#    loss.backward()
+#
+#    optimizer.step()
+#    optimizer.zero_grad()
+#
+#    if i % 1000 == 0:
+#        print(loss.item())
+#
+#print(loss.item())
+#
+## plot
+#plt.scatter(x.detach().numpy(), y.detach().numpy(), s=10)
+#x = torch.linspace(0, 1, 100).reshape(-1, 1)
+#y = model(x).detach().numpy()
+#plt.plot(x, y, color = "red")
+#plt.show()
+#
+#
+#dataset = torchvision.datasets.MNIST(
+#    root = ".tmp",
+#    train = True,
+#    transform = None,
+#    download = True,
+#)
+#
+#x, label = dataset[0]
+#print(f"size = {len(dataset)}")
+#print(f"type = {type(x)}")
+#print(f"label = {label}")
+#
+#plt.imshow(x, cmap = "gray")
+#plt.show()
+#
+#
+#transform = transforms.ToTensor()
+#
+#dataset = torchvision.datasets.MNIST(
+#    root = ".tmp",
+#    train = True,
+#    transform = transform,
+#    download = True,
+#)
+#
+#x, label = dataset[0]
+#print(f"size = {len(dataset)}")
+#print(f"type = {type(x)}")
+#print(f"label = {label}")
+#
+#
+#dataloader = torch.utils.data.DataLoader(
+#    dataset,
+#    batch_size = 32,
+#    shuffle = True,
+#)
+#
+#for x, label in dataloader:
+#    print(f"x.shape = {x.shape}")
+#    print(f"label.shape = {label.shape}")
+#    break
 
-class Model(nn.Module):
-    def __init__(self, input_size = 1, hidden_size = 10, output_size = 1):
+
+
+# Variational Auto Encoder
+
+class Encoder(nn.Module):
+    def __init__(self, input_dim: int, hidden_dim: int, latent_dim: int) -> None:
         super().__init__()
 
-        self.linear1 = nn.Linear(input_size, hidden_size)
-        self.linear2 = nn.Linear(hidden_size, output_size)
+        self.linear = nn.Linear(input_dim, hidden_dim)
+        self.linear_mu = nn.Linear(hidden_dim, latent_dim)
+        self.linear_logvar = nn.Linear(hidden_dim, latent_dim)
 
-    def forward(self, x):
-        y = self.linear1(x)
-        y = F.sigmoid(y)
-        y = self.linear2(y)
-        return y
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+        h: Tensor = self.linear(x)
+        h = F.relu(h)
 
-lr = 0.2
-iters = 10000
+        mu: Tensor = self.linear_mu(h)
+        logvar: Tensor = self.linear_logvar(h)
 
-model = Model()
-optimizer = torch.optim.SGD(model.parameters(), lr = lr)
+        sigma: Tensor = torch.exp(0.5 * logvar)
 
-for i in range(iters):
-    y_pred = model(x)
-    loss = F.mse_loss(y, y_pred)
+        return (mu, sigma)
 
-    loss.backward()
+class Decoder(nn.Module):
+    def __init__(self, latent_dim: int, hidden_dim: int, output_dim: int) -> None:
+        super().__init__()
 
-    optimizer.step()
-    optimizer.zero_grad()
+        self.linear1 = nn.Linear(latent_dim, hidden_dim)
+        self.linear2 = nn.Linear(hidden_dim, output_dim)
 
-    if i % 1000 == 0:
-        print(loss.item())
+    def forward(self, z: Tensor) -> Tensor:
+        h: Tensor = self.linear1(z)
+        h = F.relu(h)
 
-print(loss.item())
+        h = self.linear2(h)
+        x_hat: Tensor = F.sigmoid(h)
 
-# plot
-plt.scatter(x.detach().numpy(), y.detach().numpy(), s=10)
-x = torch.linspace(0, 1, 100).reshape(-1, 1)
-y = model(x).detach().numpy()
-plt.plot(x, y, color = "red")
-plt.show()
+        return x_hat
+
+def reparameterize(mu: Tensor, sigma: Tensor) -> Tensor:
+    eps: Tensor = torch.randn_like(sigma)
+    z: Tensor = mu + eps * sigma
+    return z
+
+class VAE(nn.Module):
+    def __init__(self, input_dim: int, hidden_dim: int, latent_dim: int) -> None:
+        super().__init__()
+
+        self.encoder = Encoder(input_dim, hidden_dim, latent_dim)
+        self.decoder = Decoder(latent_dim, hidden_dim, input_dim)
+
+    def get_loss(self, x: Tensor) -> Tensor:
+        mu: Tensor
+        sigma: Tensor
+        (mu, sigma) = self.encoder(x)
+
+        z: Tensor = reparameterize(mu, sigma)
+        x_hat: Tensor = self.decoder(z)
+
+        L1: Tensor = F.mse_loss(x_hat, x, reduction = "sum")
+        L2: Tensor = - torch.sum(1 + torch.log(sigma ** 2) - mu ** 2 - sigma ** 2)
+
+        batch_size: int = len(x)
+        return (L1 + L2) / batch_size
 
 
-dataset = torchvision.datasets.MNIST(
-    root = ".tmp",
-    train = True,
-    transform = None,
-    download = True,
-)
+input_dim = 784  # mnist image 28x28
+hidden_dim = 200
+latent_dim = 20  # z vector dim
 
-x, label = dataset[0]
-print(f"size = {len(dataset)}")
-print(f"type = {type(x)}")
-print(f"label = {label}")
+epochs = 30
+learning_rate = 3e-4
+batch_size = 32
 
-plt.imshow(x, cmap = "gray")
-plt.show()
-
-
-transform = transforms.ToTensor()
+transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Lambda(torch.flatten),
+])
 
 dataset = torchvision.datasets.MNIST(
     root = ".tmp",
@@ -716,20 +821,31 @@ dataset = torchvision.datasets.MNIST(
     download = True,
 )
 
-x, label = dataset[0]
-print(f"size = {len(dataset)}")
-print(f"type = {type(x)}")
-print(f"label = {label}")
-
-
 dataloader = torch.utils.data.DataLoader(
-    dataset,
-    batch_size = 32,
-    shuffle = True,
+        dataset,
+        batch_size = batch_size,
+        shuffle = True,
 )
 
-for x, label in dataloader:
-    print(f"x.shape = {x.shape}")
-    print(f"label.shape = {label.shape}")
-    break
+model = VAE(input_dim, hidden_dim, latent_dim)
+optimizer = optim.Adam(model.parameters(), lr = learning_rate)
+
+losses = []
+
+for epoch in range(epochs):
+    loss_sum = 0.0
+    cnt = 0
+
+    for x, label in dataloader:
+        optimizer.zero_grad()
+        loss = model.get_loss(x)
+        loss.backward()
+        optimizer.step()
+
+        loss_sum += loss.item()
+        cnt += 1
+
+    loss_avg = loss_sum / cnt
+    losses.append(loss_avg)
+    print(f"loss_avg = {loss_avg}")
 
