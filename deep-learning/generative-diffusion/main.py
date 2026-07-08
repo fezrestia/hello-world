@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 import os
-from scipy.stats import norm
+from scipy.stats import norm  # type: ignore[import-untyped]
 from typing import Any
 import torch
 import torch.nn as nn
@@ -848,4 +848,31 @@ for epoch in range(epochs):
     loss_avg = loss_sum / cnt
     losses.append(loss_avg)
     print(f"loss_avg = {loss_avg}")
+
+
+# plot losses
+epochs_list = list(range(1, epochs + 1))
+plt.plot(epochs_list, losses, marker = "o", linestyle = "-")
+plt.xlabel("epoch")
+plt.ylabel("loss")
+plt.show()
+
+
+# generate image
+with torch.no_grad():
+    sample_size = 64
+    z = torch.randn(sample_size, latent_dim)
+    x = model.decoder(z)
+    generated_images = x.view(sample_size, 1, 28, 28)
+
+grid_img = torchvision.utils.make_grid(
+        generated_images,
+        nrow = 8,
+        padding = 2,
+        normalize = True,
+)
+
+plt.imshow(grid_img.permute(1, 2, 0))
+plt.axis("off")
+plt.show()
 
