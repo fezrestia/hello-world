@@ -13,6 +13,8 @@ import torch.optim as optim
 from torch import Tensor
 import torchvision  # type: ignore[import-untyped]
 from torchvision import datasets, transforms  # type: ignore[import-untyped]
+from PIL import Image
+from tqdm import tqdm  # type: ignore[import-untyped]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -801,34 +803,473 @@ class VAE(nn.Module):
         return (L1 + L2) / batch_size
 
 
-input_dim = 784  # mnist image 28x28
-hidden_dim = 200
-latent_dim = 20  # z vector dim
+#input_dim = 784  # mnist image 28x28
+#hidden_dim = 200
+#latent_dim = 20  # z vector dim
+#
+#epochs = 30
+#learning_rate = 3e-4
+#batch_size = 32
+#
+#transform = transforms.Compose([
+#        transforms.ToTensor(),
+#        transforms.Lambda(torch.flatten),
+#])
+#
+#dataset = torchvision.datasets.MNIST(
+#    root = ".tmp",
+#    train = True,
+#    transform = transform,
+#    download = True,
+#)
+#
+#dataloader = torch.utils.data.DataLoader(
+#        dataset,
+#        batch_size = batch_size,
+#        shuffle = True,
+#)
+#
+#model = VAE(input_dim, hidden_dim, latent_dim)
+#optimizer = optim.Adam(model.parameters(), lr = learning_rate)
+#
+#losses = []
+#
+#for epoch in range(epochs):
+#    loss_sum = 0.0
+#    cnt = 0
+#
+#    for x, label in dataloader:
+#        optimizer.zero_grad()
+#        loss = model.get_loss(x)
+#        loss.backward()
+#        optimizer.step()
+#
+#        loss_sum += loss.item()
+#        cnt += 1
+#
+#    loss_avg = loss_sum / cnt
+#    losses.append(loss_avg)
+#    print(f"loss_avg = {loss_avg}")
+#
+#
+## plot losses
+#epochs_list = list(range(1, epochs + 1))
+#plt.plot(epochs_list, losses, marker = "o", linestyle = "-")
+#plt.xlabel("epoch")
+#plt.ylabel("loss")
+#plt.show()
+#
+#
+## generate image
+#with torch.no_grad():
+#    sample_size = 64
+#    z = torch.randn(sample_size, latent_dim)
+#    x = model.decoder(z)
+#    generated_images = x.view(sample_size, 1, 28, 28)
+#
+#grid_img = torchvision.utils.make_grid(
+#        generated_images,
+#        nrow = 8,
+#        padding = 2,
+#        normalize = True,
+#)
+#
+#plt.imshow(grid_img.permute(1, 2, 0))
+#plt.axis("off")
+#plt.show()
 
-epochs = 30
-learning_rate = 3e-4
-batch_size = 32
 
-transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Lambda(torch.flatten),
-])
 
+# U-Net
+
+class ConvBlock(nn.Module):
+    def __init__(self, in_ch: int, out_ch: int) -> None:
+        super().__init__()
+
+        self.convs = nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, 3, padding = 1),  # 3 : kernel size
+                nn.BatchNorm2d(out_ch),
+                nn.ReLU(),
+                nn.Conv2d(out_ch, out_ch, 3, padding = 1),  # 3 : kernel size
+                nn.BatchNorm2d(out_ch),
+                nn.ReLU(),
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.convs(x)
+
+class UNet(nn.Module):
+    def __init__(self, in_ch: int = 1) -> None:
+        super().__init__()
+
+        self.down1 = ConvBlock(in_ch, 64)
+        self.down2 = ConvBlock(64, 128)
+
+        self.bot1 = ConvBlock(128, 256)
+        self.up2 = ConvBlock(128 + 256, 128)
+        self.up1 = ConvBlock(128 + 64, 64)
+
+        self.out = nn.Conv2d(64, in_ch, 1)
+
+        self.maxpool = nn.MaxPool2d(2)  # 2 : kernel size
+        self.upsample = nn.Upsample(scale_factor = 2, mode = "bilinear")
+
+    def forward(self, x: Tensor) -> Tensor:
+        x1: Tensor
+        x2: Tensor
+
+        x1 = self.down1(x)
+        x = self.maxpool(x1)
+        x2 = self.down2(x)
+        x = self.maxpool(x2)
+
+        x = self.bot1(x)
+
+        x = self.upsample(x)
+        x = torch.cat([x, x2], dim = 1)
+        x = self.up2(x)
+        x = self.upsample(x)
+        x = torch.cat([x, x1], dim = 1)
+        x = self.up1(x)
+
+        x = self.out(x)
+
+        return x
+
+
+#model = UNet()
+#x = torch.randn(10, 1, 28, 28)
+#y = model(x)
+#print(f"y.shape = {y.shape}")
+
+
+# t : scalar
+# return v : (output_dim,)
+def _pos_encoding(t: Tensor, output_dim: int, device = "cpu") -> Tensor:
+    D: int = output_dim
+    v: Tensor = torch.zeros(D, device = device)
+
+    i: Tensor = torch.arange(0, D, device = device)
+    div_term: Tensor = 10000 ** (i / D)
+
+    v[0::2] = torch.sin(t / div_term[0::2])  # even num
+    v[1::2] = torch.cos(t / div_term[1::2])  # odd num
+
+    return v
+
+
+#v = _pos_encoding(Tensor(1), 16)
+#print(f"v.shape = {v.shape}")
+
+
+# ts: (N,)
+# return v : (N, output_dim)
+def pos_encoding(ts: Tensor, output_dim: int, device = "cpu") -> Tensor:
+    batch_size: int = len(ts)
+    v: Tensor = torch.zeros(batch_size, output_dim, device = device)
+    for i in range(batch_size):
+        v[i] = _pos_encoding(ts[i], output_dim, device)
+    return v
+
+
+#xs = Tensor([0, 1, 2, 3])
+#y = pos_encoding(xs, 16)
+#print(f"y.shape = {y.shape}")
+
+
+
+class TimeConvBlock(nn.Module):
+    def __init__(self, in_ch: int, out_ch: int, time_embed_dim: int) -> None:
+        super().__init__()
+
+        self.convs = nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, 3, padding = 1),  # 3 : kernel size
+                nn.BatchNorm2d(out_ch),
+                nn.ReLU(),
+                nn.Conv2d(out_ch, out_ch, 3, padding = 1),  # 3 : kernel size
+                nn.BatchNorm2d(out_ch),
+                nn.ReLU(),
+        )
+
+        self.mlp = nn.Sequential(
+                nn.Linear(time_embed_dim, in_ch),
+                nn.ReLU(),
+                nn.Linear(in_ch, in_ch),
+        )
+
+    # x : (N, C, H, W)
+    # v : (N, time_embed_dim,)
+    # mlp(v) : (N, C,)
+    def forward(self, x: Tensor, v: Tensor) -> Tensor:
+        N, C, _H, _W = x.shape
+
+        v = self.mlp(v)
+        v = v.view(N, C, 1, 1)
+
+        y: Tensor = self.convs(x + v)
+        return y
+
+class TimeUNet(nn.Module):
+    def __init__(self, in_ch: int = 1, time_embed_dim: int = 100) -> None:
+        super().__init__()
+
+        self.time_embed_dim: int = time_embed_dim
+
+        self.down1 = TimeConvBlock(in_ch, 64, time_embed_dim)
+        self.down2 = TimeConvBlock(64, 128, time_embed_dim)
+
+        self.bot1 = TimeConvBlock(128, 256, time_embed_dim)
+        self.up2 = TimeConvBlock(128 + 256, 128, time_embed_dim)
+        self.up1 = TimeConvBlock(128 + 64, 64, time_embed_dim)
+
+        self.out = nn.Conv2d(64, in_ch, 1)
+
+        self.maxpool = nn.MaxPool2d(2)  # 2 : kernel size
+        self.upsample = nn.Upsample(scale_factor = 2, mode = "bilinear")
+
+    def forward(self, x: Tensor, timesteps: Tensor) -> Tensor:
+        x1: Tensor
+        x2: Tensor
+
+        v: Tensor = pos_encoding(timesteps, self.time_embed_dim, x.device)
+
+        x1 = self.down1(x, v)
+        x = self.maxpool(x1)
+        x2 = self.down2(x, v)
+        x = self.maxpool(x2)
+
+        x = self.bot1(x, v)
+
+        x = self.upsample(x)
+        x = torch.cat([x, x2], dim = 1)
+        x = self.up2(x, v)
+        x = self.upsample(x)
+        x = torch.cat([x, x1], dim = 1)
+        x = self.up1(x, v)
+
+        x = self.out(x)
+
+        return x
+
+
+# load data
+file_path = os.path.join(SCRIPT_DIR, "dataset/flower.png")
+image = plt.imread(file_path)
+print(f"loaded image.shape = {image.shape}")
+
+# image pre-proc
+preprocess = transforms.ToTensor()
+x = preprocess(image)
+print(f"pre-processed image x.shape = {x.shape}")
+
+
+
+def reverse_to_img(x: Tensor) -> Image.Image:
+    x = x * 255.0
+    x = x.clamp(0.0, 255.0)
+    x = x.to(torch.uint8)
+    to_pil = transforms.ToPILImage()
+    return to_pil(x)
+
+
+
+T = 1000
+beta_start = 0.0001
+beta_end = 0.02
+betas = torch.linspace(beta_start, beta_end, T)
+imgs = []
+
+for tt in range(T):
+    if tt % 100 == 0:
+        img = reverse_to_img(x)
+        imgs.append(img)
+
+    beta = betas[tt]
+
+    eps = torch.randn_like(x)
+
+    # x_t <- x_t-1
+    x = torch.sqrt(1.0 - beta) * x + torch.sqrt(beta) * eps
+
+plt.figure(figsize = (15, 6))
+for i, img in enumerate(imgs[:10]):
+    plt.subplot(2, 5, i + 1)
+    plt.imshow(img)
+    plt.title(f"Noise: {i * 100}")
+    plt.axis("off")
+plt.show()
+
+
+def add_noise(x_0: Tensor, t: int, betas: Tensor) -> Tensor:
+    T: int = len(betas)
+    assert t >= 1 and t <= T
+
+    alphas: Tensor = 1.0 - betas
+    alpha_bars = torch.cumprod(alphas, dim = 0)
+    t_idx: int = t - 1
+    alpha_bar = alpha_bars[t_idx]
+
+    eps = torch.randn_like(x_0)  # noise
+
+    x_t: Tensor = torch.sqrt(alpha_bar) * x_0 + torch.sqrt(1.0 - alpha_bar) * eps
+
+    return x_t
+
+
+x = preprocess(image)  # reload
+
+noise_t = 100
+x_t = add_noise(x, noise_t, betas)
+
+img = reverse_to_img(x_t)
+plt.imshow(img)
+plt.title(f"Noise: {noise_t}")
+plt.axis("off")
+plt.show()
+
+
+
+class Diffuser:
+    def __init__(
+            self,
+            num_timesteps: int = 1000,
+            beta_start: float = 0.0001,
+            beta_end: float = 0.02,
+            device = "cpu",
+    ) -> None:
+        self.num_timesteps: int = num_timesteps
+        self.device = device
+
+        self.betas: Tensor = torch.linspace(  # (timesteps,)
+                beta_start,
+                beta_end,
+                num_timesteps,
+                device = device,
+        )
+
+        self.alphas: Tensor = 1.0 - self.betas  # (timesteps,)
+        self.alpha_bars: Tensor = torch.cumprod(self.alphas, dim = 0)  # (timesteps,)
+
+    # x_0 : (N, C, H, W)
+    # t : (timesteps,)
+    def add_noise(self, x_0: Tensor, t: Tensor) -> tuple[Tensor, Tensor]:
+        T: int = self.num_timesteps
+        assert (t >= 1).all() and (t <= T).all()
+
+        t_idx: Tensor = t - 1
+
+        alpha_bar = self.alpha_bars[t_idx]  # (timesteps,)
+        N: int = alpha_bar.size(0)
+        alpha_bar = alpha_bar.view(N, 1, 1, 1)  # (timesteps, 1, 1, 1)
+
+        noise: Tensor = torch.randn_like(x_0, device = self.device)  # (N, C, H, W)
+
+        # x_t : (N, C, H, W)
+        x_t: Tensor = torch.sqrt(alpha_bar) * x_0 + torch.sqrt(1.0 - alpha_bar) * noise
+
+        return x_t, noise  # (N, C, H, W), (N, C, H, W)
+
+    # x: (N, C, H, W)
+    # t: (N,)
+    def denoise(self, model: nn.Module, x: Tensor, t: Tensor) -> Tensor:
+        T: int = self.num_timesteps
+        assert (t >= 1).all() and (t <= T).all()
+
+        t_idx: Tensor = t - 1  # (N,)
+        alpha: Tensor = self.alphas[t_idx]  # (N,) <- (timesteps,)
+        alpha_bar: Tensor = self.alpha_bars[t_idx]  # (N,) <- (timesteps,)
+        alpha_bar_prev: Tensor = self.alpha_bars[t_idx - 1]  # (N,) <- (timesteps,)
+
+        N: int = alpha.size(0)  # scalar <- (N,)
+        alpha = alpha.view(N, 1, 1, 1)  # (N, 1, 1, 1) <- (N,)
+        alpha_bar = alpha_bar.view(N, 1, 1, 1)  # (N, 1, 1, 1) <- (N,)
+        alpha_bar_prev = alpha_bar_prev.view(N, 1, 1, 1)  # (N, 1, 1, 1) <- (N,)
+
+        model.eval()
+
+        with torch.no_grad():
+            eps: Tensor = model(x, t)  # (N, C, H, W) <- (N, C, H, W), (N,)
+
+        model.train()
+
+        noise = torch.randn_like(x, device = self.device)  # (N, C, H, W)
+        noise[t == 1] = 0
+
+        # mu : (N, C, H, W)
+        # std : (N, C, H, W)
+        mu: Tensor = (x - ((1.0 - alpha) / torch.sqrt(1.0 - alpha_bar)) * eps) / torch.sqrt(alpha)
+        std: Tensor = torch.sqrt((1.0 - alpha) * (1.0 - alpha_bar_prev) / (1.0 - alpha_bar))
+
+        return mu + noise * std  # (N, C, H, W)
+
+    # x : (N, C, H, W)
+    def reverse_to_img(self, x: Tensor) -> Image.Image:
+        x = x * 255.0
+        x = x.clamp(0.0, 255.0)
+        x = x.to(torch.uint8)
+        x = x.cpu()
+        to_pil = transforms.ToPILImage()
+        return to_pil(x)
+
+    def sample(
+            self,
+            model: nn.Module,
+            x_shape: tuple[int, int, int, int] = (20, 1, 28, 28),
+    ) -> list[Image.Image]:
+        batch_size: int = x_shape[0]
+
+        x: Tensor = torch.randn(x_shape, device = self.device)  # (N, C, H, W)
+
+        for i in tqdm(range(self.num_timesteps, 0, -1)):
+            t: Tensor = torch.tensor(
+                    [i] * batch_size,
+                    device = self.device,
+                    dtype = torch.long,
+            )  # (N,)
+
+            x = self.denoise(model, x, t)
+
+        images: list[Image.Image] = [self.reverse_to_img(x[i]) for i in range(batch_size)]
+        return images
+
+
+print(f"------------ U-Net and Diffuser ------------")
+
+img_size = 28
+batch_size = 128
+num_timesteps = 1000
+epochs = 10
+lr = 1e-3
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def show_images(images, rows = 2, cols = 10):
+    fig = plt.figure(figsize = (cols, rows))
+    i = 0
+    for r in range(rows):
+        for c in range(cols):
+            fig.add_subplot(rows, cols, i + 1)
+            plt.imshow(images[i], cmap = "gray")
+            plt.axis("off")
+            i += 1
+    plt.show()
+
+
+preprocess = transforms.ToTensor()
 dataset = torchvision.datasets.MNIST(
-    root = ".tmp",
-    train = True,
-    transform = transform,
-    download = True,
+        root = ".tmp",
+        download = True,
+        transform = preprocess,
 )
-
 dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size = batch_size,
         shuffle = True,
 )
-
-model = VAE(input_dim, hidden_dim, latent_dim)
-optimizer = optim.Adam(model.parameters(), lr = learning_rate)
+diffuser = Diffuser(num_timesteps, device = device)
+model = TimeUNet()
+model.to(device)
+optimizer = optim.Adam(model.parameters(), lr = lr)
 
 losses = []
 
@@ -836,9 +1277,21 @@ for epoch in range(epochs):
     loss_sum = 0.0
     cnt = 0
 
-    for x, label in dataloader:
+    images = diffuser.sample(model)
+    show_images(images)
+
+    for images, labels in tqdm(dataloader):
         optimizer.zero_grad()
-        loss = model.get_loss(x)
+
+        x = images.to(device)
+        t = torch.randint(1, num_timesteps + 1, (len(x),), device = device)
+
+        x_noisy, noise = diffuser.add_noise(x, t)
+
+        noise_pred = model(x_noisy, t)
+
+        loss = F.mse_loss(noise, noise_pred)
+
         loss.backward()
         optimizer.step()
 
@@ -847,32 +1300,13 @@ for epoch in range(epochs):
 
     loss_avg = loss_sum / cnt
     losses.append(loss_avg)
-    print(f"loss_avg = {loss_avg}")
+    print(f"epoch = {epoch}, loss = {loss_avg}")
 
-
-# plot losses
-epochs_list = list(range(1, epochs + 1))
-plt.plot(epochs_list, losses, marker = "o", linestyle = "-")
+plt.plot(losses)
 plt.xlabel("epoch")
 plt.ylabel("loss")
 plt.show()
 
-
-# generate image
-with torch.no_grad():
-    sample_size = 64
-    z = torch.randn(sample_size, latent_dim)
-    x = model.decoder(z)
-    generated_images = x.view(sample_size, 1, 28, 28)
-
-grid_img = torchvision.utils.make_grid(
-        generated_images,
-        nrow = 8,
-        padding = 2,
-        normalize = True,
-)
-
-plt.imshow(grid_img.permute(1, 2, 0))
-plt.axis("off")
-plt.show()
+images = diffuser.sample(model)
+show_images(images)
 
