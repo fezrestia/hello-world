@@ -348,3 +348,124 @@ tiny_codes_bin = f"{SCRIPT_DIR}/dataset/codebot/tiny_codes.bin"
 #print(f"token id count = {len(ids_array)}")
 #print(f"first 20 token id : {ids_array[:20]}")
 
+
+
+print(f"# 2 : Model")
+
+## key: tuple[float, ...]
+## value : float
+#movie_preferences = {
+#    (8.0, 2.0, 3.0): 85.0,
+#    (3.0, 9.0, 1.0): 70.0,
+#    (1.0, 2.0, 9.0): 60.0,
+#    (5.0, 5.0, 5.0): 75.0,
+#    (7.0, 6.0, 2.0): 80.0,
+#    (2.0, 7.0, 6.0): 65.0,
+#    (9.0, 1.0, 1.0): 90.0,
+#}
+#
+#new_movie = (6.0, 4.0, 5.0)
+#
+#
+#def soft_dictionary(
+#        query: tuple[float, ...],
+#        dictionary: dict[tuple[float, ...], float],
+#) -> tuple[float, tuple[float, ...]]:
+#    similarity: list[float] = []
+#    for key in dictionary:
+#        sim: float = np.dot(query, key)
+#        similarity.append(sim)
+#
+#    exp_similarity: np.ndarray = np.exp(np.asarray(similarity))
+#    weights: np.ndarray = exp_similarity / np.sum(exp_similarity)
+#
+#    result: float = 0.0
+#    for weight, value in zip(weights, dictionary.values()):
+#        result += weight * value
+#
+#    return (result, tuple(weights))
+#
+#
+#predicted_rating, weights = soft_dictionary(new_movie, movie_preferences)
+#print(f"new movie = {new_movie}, predicted rating = {predicted_rating:.2f}")
+#print(f"weights :")
+#for key, weight in zip(movie_preferences.keys(), weights):
+#    print(f"movie = {key} : {weight * 100:.2f} %")
+
+
+#K: Tensor = torch.tensor([
+#        [8.0, 2.0, 3.0],
+#        [3.0, 9.0, 1.0],
+#        [1.0, 2.0, 9.0],
+#        [5.0, 5.0, 5.0],
+#        [7.0, 6.0, 2.0],
+#        [2.0, 7.0, 6.0],
+#        [9.0, 1.0, 1.0],
+#], dtype = torch.float32)
+#
+#V: Tensor = torch.tensor([
+#        85.0,
+#        70.0,
+#        60.0,
+#        75.0,
+#        80.0,
+#        65.0,
+#        90.0,
+#], dtype = torch.float32)
+#
+#Q: Tensor = torch.tensor([
+#        [6.0, 4.0, 5.0],
+#        [2.0, 8.0, 3.0],
+#        [4.0, 3.0, 7.0],
+#], dtype = torch.float32)
+
+
+# Attention(Q, K, V) = softmax(QK^T / sqrt(d))V
+#
+# Q: (m, d)
+# K: (n, d)
+# V: (n, dv)
+# similarity: (m, n)
+# weights: (m, n)
+# outputs: (m, dv)
+def attention(Q: Tensor, K: Tensor, V: Tensor) -> tuple[Tensor, Tensor]:
+    d: int = Q.shape[1]
+
+    similarity: Tensor = torch.matmul(Q, K.t())
+    weights: Tensor = F.softmax(similarity, dim = 1) / np.sqrt(d)
+    output: Tensor = torch.matmul(weights, V)
+
+    print(f"Q.shape, K.shape, V.shape = {Q.shape}, {K.shape}, {V.shape}")
+    print(f"similarity.shape = {similarity.shape}")
+    print(f"weights.shape = {weights.shape}")
+    print(f"output.shape = {output.shape}")
+
+    return output, weights
+
+
+#predicted_ratings, weights = attention(Q, K, V)
+#
+#for movie, rating in zip(Q, predicted_ratings):
+#    print(f"movie = {movie.numpy()}, rating = {rating.item():.2f}")
+
+
+#d = 10
+#num_samples = 10000
+#dot_products = []
+#scaled_dot_products = []
+#for _ in range(num_samples):
+#    q = np.random.randn(d)
+#    k = np.random.randn(d)
+#    dot_product = np.dot(q, k)
+#    scaled_dot_product = dot_product / np.sqrt(d)
+#    dot_products.append(dot_product)
+#    scaled_dot_products.append(scaled_dot_product)
+#plt.figure(figsize = (10, 6))
+#plt.hist(dot_products, bins = 50, alpha = 0.5, label = "w/o scaling")
+#plt.hist(scaled_dot_products, bins = 50, alpha = 0.5, label = "w/ scaling")
+#plt.legend()
+#plt.show()
+#
+#print(f"variance dot_product = {np.var(dot_products)}")
+#print(f"variance scaled dot product = {np.var(scaled_dot_products)}")
+
