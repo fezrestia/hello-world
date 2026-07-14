@@ -469,3 +469,128 @@ def attention(Q: Tensor, K: Tensor, V: Tensor) -> tuple[Tensor, Tensor]:
 #print(f"variance dot_product = {np.var(dot_products)}")
 #print(f"variance scaled dot product = {np.var(scaled_dot_products)}")
 
+
+
+# B : batch size
+# C : context size
+# E : embed vector dim (word vec dim)
+# D : key/query dim
+#class Attention(nn.Module):
+#    def __init__(self, embed_dim: int, key_dim: int) -> None:
+#        super().__init__()
+#
+#        self.W_q = nn.Linear(embed_dim, key_dim, bias = False)
+#        self.W_k = nn.Linear(embed_dim, key_dim, bias = False)
+#        self.W_v = nn.Linear(embed_dim, key_dim, bias = False)
+#        self.W_o = nn.Linear(key_dim, embed_dim, bias = False)
+#
+#        self.key_dim: int = key_dim
+#
+#    # x : (B, C, E)
+#    def forward(self, x: Tensor) -> Tensor:
+#        Q: Tensor = self.W_q(x)  # Q : (B, C, E) @ (E, D) = (B, C, D)
+#        K: Tensor = self.W_k(x)  # K : (B, C, E) @ (E, D) = (B, C, D)
+#        V: Tensor = self.W_v(x)  # V : (B, C, E) @ (E, D) = (B, C, D)
+#
+#        K_t: Tensor = K.transpose(-2, -1)  # K : (B, C, D), swap axis -2, -1 -> K_t : (B, D, C)
+#        scores: Tensor = torch.matmul(Q, K_t)  # (B, C, D) @ (B, D, C) = (B, C, C)
+#        scores = scores / (self.key_dim ** 0.5)
+#
+#        B, C, E = x.shape
+#        mask: Tensor = torch.tril(torch.ones(C, C, device = scores.device))  # (C, C) triangle low
+#        scores = scores.masked_fill(mask == 0, float("-inf"))  # (B, C, C)
+#
+#        weights: Tensor = F.softmax(scores, dim = -1)  # (B, C, C)
+#        hidden: Tensor = torch.matmul(weights, V)  # (B, C, C) @ (B, C, D) = (B, C, D)
+#
+#        output: Tensor = self.W_o(hidden)  # (B, C, D) @ (D, E) = (B, C, E)
+#
+#        return output
+#
+#
+#attention = Attention(embed_dim = 256, key_dim = 64)
+#x = torch.randn(2, 5, 256)
+#y = attention(x)
+#print(f"x.shape = {x.shape}")
+#print(f"y.shape = {y.shape}")
+
+
+
+
+# B : batch size
+# C : context size
+# E : embed vector dim (word vec dim)
+# H : head count
+# D : key/query dim for each head
+
+class MultiHeadAttention(nn.Module):
+    def __init__(
+            self,
+            embed_dim: int,
+            head_count: int,
+            head_dim: int,
+            dropout_rate: float = 0.1) -> None:
+        super().__init__()
+        self.head_count: int = head_count
+        self.head_dim: int = head_dim
+
+        E: int = embed_dim
+        H: int = head_count
+        D: int = head_dim
+
+        self.W_q = nn.Linear(E, H * D, bias = False)
+        self.W_k = nn.Linear(E, H * D, bias = False)
+        self.W_v = nn.Linear(E, H * D, bias = False)
+        self.W_o = nn.Linear(H * D, E, bias = False)
+
+        self.attention_dropout = nn.Dropout(dropout_rate)
+        self.output_dropout = nn.Dropout(dropout_rate)
+
+    # x : (B, C, E)
+    def forward(self, x: Tensor) -> Tensor:
+        B, C, E = x.shape
+        H = self.head_count
+        D = self.head_dim
+
+        Q: Tensor = self.W_q(x)  # Q : (B, C, E) @ (E, H * D) = (B, C, H * D)
+        K: Tensor = self.W_k(x)  # K : (B, C, E) @ (E, H * D) = (B, C, H * D)
+        V: Tensor = self.W_v(x)  # V : (B, C, E) @ (E, H * D) = (B, C, H * D)
+
+        Q = Q.view(B, C, H, D).transpose(1, 2)  # (B, H, C, D)
+        K = K.view(B, C, H, D).transpose(1, 2)  # (B, H, C, D)
+        V = V.view(B, C, H, D).transpose(1, 2)  # (B, H, C, D)
+
+        K_t: Tensor = K.transpose(-2, -1)  # (B, H, C, D) -> (B, H, D, C)
+        scores: Tensor = torch.matmul(Q, K_t)  # (B, H, C, D) @ (B, H, D, C) = (B, H, C, C)
+        scores = scores / (D ** 0.5)
+
+        mask: Tensor = torch.tril(torch.ones(C, C, device = scores.device))  # (C, C) triangle low
+        scores = scores.masked_fill(mask == 0, float("-inf"))  # (B, H, C, C)
+
+        weights: Tensor = F.softmax(scores, dim = -1)  # (B, H, C, C)
+        weights = self.attention_dropout(weights)
+
+        hidden: Tensor = torch.matmul(weights, V)  # (B, H, C, C) @ (B, H, C, D) = (B, H, C, D)
+        hidden = hidden.transpose(1, 2).contiguous()  # (B, C, H, D)
+        hidden = hidden.view(B, C, H * D)  # (B, C, H * D)
+
+        output: Tensor = self.W_o(hidden)  # (B, C, H * D) @ (H * D, E) = (B, C, E)
+        output = self.output_dropout(output)
+
+        return output
+
+
+embed_dim = 512
+head_count = 8
+head_dim = 64
+
+mha = MultiHeadAttention(embed_dim, head_count, head_dim)
+
+batch_size = 2
+context_len = 10
+x = torch.randn(batch_size, context_len, embed_dim)
+
+output = mha(x)
+print(f"x.shape = {x.shape}")
+print(f"output.shape = {output.shape}")
+
