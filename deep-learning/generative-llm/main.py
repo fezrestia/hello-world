@@ -20,6 +20,8 @@ import re
 import regex  # type: ignore[import-untyped]
 from collections.abc import Iterable
 import pickle
+from torch.utils.data import Dataset, DataLoader
+from itertools import cycle
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 Path(f"{SCRIPT_DIR}/.tmp").mkdir(parents = True, exist_ok = True)
@@ -731,7 +733,7 @@ class GPT(nn.Module):
             torch.nn.init.normal_(module.weight, mean = 0.0, std = 0.02)
 
     # ids : (B, C) input text
-    # return : (B, V) output vocab probability
+    # return : (B, C, V) output vocab probability for each context token
     def forward(self, ids: Tensor) -> Tensor:
         B, C = ids.shape
 
@@ -785,8 +787,86 @@ class GPT(nn.Module):
 
 gpt_model_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_pt"
 
+#vocab_size = 1000
+#max_context_len = 256
+#embed_dim = 384
+#head_count = 6
+#layer_count = 6
+#ffn_hidden_dim = 4 * embed_dim
+#dropout_rate = 0.1
+#
+#model = GPT(
+#        vocab_size,
+#        max_context_len,
+#        embed_dim,
+#        head_count,
+#        layer_count,
+#        ffn_hidden_dim,
+#        dropout_rate,
+#)
+#
+#dummy_input = torch.randint(0, vocab_size, (1, max_context_len))
+#logits = model(dummy_input)
+#print(f"output logits.shape = {logits.shape}")
+#
+#model.save_to(gpt_model_pt)
+
+
+
+print(f"# 3 : Training")
+
+class TokenDataset(Dataset):
+    def __init__(self, token_ids: list[int]|np.ndarray, context_len: int) -> None:
+        self.tokens: Tensor = torch.tensor(token_ids, dtype = torch.long)
+        self.context_len: int = context_len
+
+    def __len__(self) -> int:
+        # return valid input and label count.
+        # ids : 0, 1, 2, 3, 4
+        # context = 2
+        # input : 0-1, 1-2, 2-3, 3-4
+        # label : 1-2, 2-3, 3-4
+        # len = len(ids) - context (label len)
+        return len(self.tokens) - self.context_len
+
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor]:
+        x: Tensor = self.tokens[idx:idx + self.context_len]
+        y: Tensor = self.tokens[idx + 1:idx + self.context_len + 1]
+
+        return (x, y)
+
+
+ids = np.fromfile(tiny_codes_bin, dtype = np.uint16)
+print(f"ids len = {len(ids)}")
+
+dataset = TokenDataset(ids, context_len = 256)
+dataloader = DataLoader(dataset, batch_size = 32, shuffle = True)
+
+
+#for inputs, labels in dataloader:
+#    print(f"input tensor shape = {inputs.shape}")
+#    print(f"label tensor shape = {labels.shape}")
+#    break
+
+
+def get_device() -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
+
+
+device: torch.device = get_device()
+model_pretrain_pt = f"{SCRIPT_DIR}/.tmp/model_pretrain_pt"
+
+# hyper params
+context_len = 256
 vocab_size = 1000
-max_context_len = 256
+batch_size = 32
+learning_rate = 3e-4
+max_iters = 20000
 embed_dim = 384
 head_count = 6
 layer_count = 6
@@ -795,20 +875,46 @@ dropout_rate = 0.1
 
 model = GPT(
         vocab_size,
-        max_context_len,
+        context_len,
         embed_dim,
         head_count,
         layer_count,
         ffn_hidden_dim,
         dropout_rate,
-)
+).to(device)
 
-dummy_input = torch.randint(0, vocab_size, (1, max_context_len))
-logits = model(dummy_input)
-print(f"output logits.shape = {logits.shape}")
-
-model.save_to(gpt_model_pt)
+optimizer = torch.optim.AdamW(model.parameters(), lr = learning_rate)
 
 
+losses = []
+data_iter = cycle(dataloader)  # infinite loop
+pbar = tqdm(range(max_iters))
 
+for i in pbar:
+    # (B, C)
+    batch_x, batch_y = next(data_iter)
+    batch_x, batch_y = batch_x.to(device), batch_y.to(device)
+
+    # (B, C) -> (B, C, V)
+    logits = model(batch_x)
+
+    # logits : (B, C, V) -> (B * C, V)
+    # batch_y : (B, C) -> (B * C,)
+    # loss is calculated by V num predicted val and 1 label val.
+    loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    losses.append(loss.item())
+
+    pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+
+plt.figure(figsize = (10, 6))
+plt.plot(losses)
+plt.xlabel("iteration")
+plt.ylabel("loss")
+plt.grid(True)
+plt.savefig(f"{SCRIPT_DIR}/.tmp/loss_pretrain.png")
 
