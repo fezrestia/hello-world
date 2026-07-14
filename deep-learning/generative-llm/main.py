@@ -861,6 +861,8 @@ def get_device() -> torch.device:
 device: torch.device = get_device()
 model_pretrain_pt = f"{SCRIPT_DIR}/.tmp/model_pretrain_pt"
 
+
+
 # hyper params
 context_len = 256
 vocab_size = 1000
@@ -917,4 +919,63 @@ plt.xlabel("iteration")
 plt.ylabel("loss")
 plt.grid(True)
 plt.savefig(f"{SCRIPT_DIR}/.tmp/loss_pretrain.png")
+
+model.save_to(model_pretrain_pt)
+
+
+
+@torch.no_grad()
+def generate(
+        model: GPT,
+        tokenizer: BPETokenizer,
+        prompt: str,
+        max_new_tokens: int = 10000,
+        temperature: float = 1.0,
+) -> str:
+    model.eval()  # evaluation mode
+
+    device = next(model.parameters()).device
+
+    token_ids: list[int] = tokenizer.encode(prompt)
+    ids: Tensor = torch.tensor([token_ids], dtype = torch.long, device = device)  # (B, C)  B == 1
+
+    generated_ids: Tensor = ids.clone()  # default
+
+    for _ in range(max_new_tokens):
+        # limit context len
+        if ids.size(1) > model.max_context_len:
+            ids = ids[:, -model.max_context_len:]
+
+        # (B, C, V) -> (B, 1, V) : last context probability
+        logits: Tensor = model(ids)[:, -1, :]
+        next_id: Tensor
+        if temperature == 0.0:
+            next_id = logits.argmax(dim = -1, keepdim = True)  # max probability on V
+        else:
+            probs: Tensor = F.softmax(logits / temperature, dim = -1)  # softmax on V
+            next_id = torch.multinomial(probs, num_samples = 1)  # sampling
+
+        if next_id.item() == tokenizer.end_token_id:
+            break
+
+        ids = torch.cat((ids, next_id), dim = 1)  # (B, C)
+        generated_ids = torch.cat((generated_ids, next_id), dim = 1)  # (B, C)
+
+    generated_text: str = tokenizer.decode(generated_ids[0].tolist())
+    return generated_text
+
+
+
+prompt = "def"
+max_new_tokens = 200
+temperature = 1.0
+
+tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
+model = GPT.load_from(gpt_model_pt)
+
+for i in range(5):
+    print(f"------------ sample {i + 1} ------------")
+    generated_text = generate(model, tokenizer, prompt, max_new_tokens, temperature)
+    print(generated_text)
+    print()
 
