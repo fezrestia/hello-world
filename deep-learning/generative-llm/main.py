@@ -522,6 +522,7 @@ def attention(Q: Tensor, K: Tensor, V: Tensor) -> tuple[Tensor, Tensor]:
 # E : embed vector dim (word vec dim)
 # H : head count
 # D : key/query dim for each head
+# V : vocab size
 
 class MultiHeadAttention(nn.Module):
     def __init__(
@@ -580,17 +581,234 @@ class MultiHeadAttention(nn.Module):
         return output
 
 
-embed_dim = 512
-head_count = 8
-head_dim = 64
+#embed_dim = 512
+#head_count = 8
+#head_dim = 64
+#
+#mha = MultiHeadAttention(embed_dim, head_count, head_dim)
+#
+#batch_size = 2
+#context_len = 10
+#x = torch.randn(batch_size, context_len, embed_dim)
+#
+#output = mha(x)
+#print(f"x.shape = {x.shape}")
+#print(f"output.shape = {output.shape}")
 
-mha = MultiHeadAttention(embed_dim, head_count, head_dim)
 
-batch_size = 2
-context_len = 10
-x = torch.randn(batch_size, context_len, embed_dim)
+class LayerNorm(nn.Module):
+    def __init__(self, embed_dim: int) -> None:
+        super().__init__()
 
-output = mha(x)
-print(f"x.shape = {x.shape}")
-print(f"output.shape = {output.shape}")
+        self.gamma = nn.Parameter(torch.ones(embed_dim))
+        self.beta = nn.Parameter(torch.zeros(embed_dim))
+        self.eps = 1e-5
+
+    # x : (B, C, E)
+    # return : (B, C, E)
+    def forward(self, x: Tensor) -> Tensor:
+        mean: Tensor = x.mean(dim = -1, keepdim = True)  # (B, C, 1)
+        var: Tensor = x.var(dim = -1, keepdim = True, unbiased = False)  # (B, C, 1)
+        norm_x: Tensor = (x - mean) / torch.sqrt(var + self.eps)  # (B, C, E)
+        return self.gamma * norm_x + self.beta
+
+
+class GELU(nn.Module):
+    # x : (B, C, E)
+    # return : (B, C, E)
+    def forward(self, x: Tensor) -> Tensor:
+        return 0.5 * x * (
+                1.0 + torch.tanh(
+                        torch.sqrt(torch.tensor(2.0 / torch.pi))
+                        * (x + 0.044715 * torch.pow(x, 3))
+                )
+        )
+
+
+class FFN(nn.Module):
+    def __init__(
+            self,
+            x_dim: int,
+            hidden_dim: int|None = None,
+            dropout_rate: float = 0.1,
+    ) -> None:
+        super().__init__()
+
+        if hidden_dim is None:
+            hidden_dim = int(4 * x_dim)
+
+        self.layers = nn.Sequential(
+                nn.Linear(x_dim, hidden_dim),
+                GELU(),
+                nn.Linear(hidden_dim, x_dim),
+                nn.Dropout(dropout_rate),
+        )
+
+    # x : (B, C, E)
+    # return : (B, C, E)
+    def forward(self, x: Tensor) -> Tensor:
+        return self.layers(x)
+
+
+class Block(nn.Module):
+    def __init__(
+            self,
+            embed_dim: int,
+            head_count: int,
+            ffn_hidden_dim: int|None = None,
+            dropout_rate: float = 0.1,
+    ) -> None:
+        super().__init__()
+
+        head_dim: int = embed_dim // head_count
+
+        self.norm1 = LayerNorm(embed_dim)
+        self.attn = MultiHeadAttention(embed_dim, head_count, head_dim, dropout_rate)
+        self.norm2 = LayerNorm(embed_dim)
+        self.ffn = FFN(embed_dim, ffn_hidden_dim, dropout_rate)
+
+    # x : (B, C, E)
+    # return : (B, C, E)
+    def forward(self, x: Tensor) -> Tensor:
+        x = x + self.attn(self.norm1(x))
+        x = x + self.ffn(self.norm2(x))
+        return x
+
+
+class GPT(nn.Module):
+    def __init__(
+            self,
+            vocab_size: int,
+            max_context_len: int,
+            embed_dim: int,
+            head_count: int,
+            layer_count: int,
+            ffn_hidden_dim: int,
+            dropout_rate: float,
+    ) -> None:
+        super().__init__()
+
+        self.vocab_size: int = vocab_size
+        self.max_context_len: int = max_context_len
+        self.embed_dim: int = embed_dim
+        self.head_count: int = head_count
+        self.layer_count: int = layer_count
+        self.ffn_hidden_dim: int = ffn_hidden_dim
+        self.dropout_rate: float = dropout_rate
+
+        # embedding layer
+        self.embed = nn.Embedding(self.vocab_size, self.embed_dim)  # V -> E
+        self.pos_embed = nn.Embedding(self.max_context_len, self.embed_dim)  # C -> E, learned positional embedding
+        self.dropout = nn.Dropout(self.dropout_rate)
+
+        # transformer
+        self.blocks = nn.ModuleList([
+                Block(
+                        self.embed_dim,
+                        self.head_count,
+                        self.ffn_hidden_dim,
+                        self.dropout_rate,
+                )
+                for _ in range(self.layer_count)
+        ])
+
+        # output
+        self.norm = nn.LayerNorm(self.embed_dim)
+        self.unembed = nn.Linear(self.embed_dim, self.vocab_size)  # (E, V)
+
+        # weight tying
+        self.embed.weight = self.unembed.weight
+
+        # weight init for each module in this class.
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module: nn.Module) -> None:
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean = 0.0, std = 0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean = 0.0, std = 0.02)
+
+    # ids : (B, C) input text
+    # return : (B, V) output vocab probability
+    def forward(self, ids: Tensor) -> Tensor:
+        B, C = ids.shape
+
+        # embed
+        pos: Tensor = torch.arange(0, C, dtype = torch.long, device = ids.device)  # (C,) [0, 1, 2, ..., C]
+        emb: Tensor = self.embed(ids)  # (B, C) -> (B, C, E) via (V, E)
+        pos_emb: Tensor = self.pos_embed(pos)  # (C,) -> (C, E)
+        x: Tensor = self.dropout(emb + pos_emb)  # (B, C, E)
+
+        # transformer
+        for block in self.blocks:
+            x = block(x)
+        x = self.norm(x)
+
+        # output
+        logits: Tensor = self.unembed(x)  # (B, C, E) @ (E, V) = (B, C, V)
+        return logits
+
+    def save_to(self, file_path: str) -> None:
+        checkpoint = {
+                "model_state_dict": self.state_dict(),
+                "vocab_size": self.vocab_size,
+                "max_context_len": self.max_context_len,
+                "embed_dim": self.embed_dim,
+                "head_count": self.head_count,
+                "layer_count": self.layer_count,
+                "ffn_hidden_dim": self.ffn_hidden_dim,
+                "dropout_rate": self.dropout_rate,
+        }
+        torch.save(checkpoint, file_path)
+
+    @classmethod
+    def load_from(cls, file_path: str, device = "cpu") -> Self:
+        checkpoint = torch.load(file_path, map_location = device)
+
+        model = cls(
+                vocab_size = checkpoint["vocab_size"],
+                max_context_len = checkpoint["max_context_len"],
+                embed_dim = checkpoint["embed_dim"],
+                head_count = checkpoint["head_count"],
+                layer_count = checkpoint["layer_count"],
+                ffn_hidden_dim = checkpoint["ffn_hidden_dim"],
+                dropout_rate = checkpoint["dropout_rate"],
+        )
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.to(device)
+
+        return model
+
+
+
+gpt_model_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_pt"
+
+vocab_size = 1000
+max_context_len = 256
+embed_dim = 384
+head_count = 6
+layer_count = 6
+ffn_hidden_dim = 4 * embed_dim
+dropout_rate = 0.1
+
+model = GPT(
+        vocab_size,
+        max_context_len,
+        embed_dim,
+        head_count,
+        layer_count,
+        ffn_hidden_dim,
+        dropout_rate,
+)
+
+dummy_input = torch.randint(0, vocab_size, (1, max_context_len))
+logits = model(dummy_input)
+print(f"output logits.shape = {logits.shape}")
+
+model.save_to(gpt_model_pt)
+
+
+
 
