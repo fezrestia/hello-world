@@ -864,6 +864,7 @@ device: torch.device = get_device()
 
 # Pre-Training GPT
 #
+#
 ## hyper params
 #context_len = 256
 #vocab_size = 1000
@@ -920,6 +921,7 @@ device: torch.device = get_device()
 #plt.ylabel("loss")
 #plt.grid(True)
 #plt.savefig(f"{SCRIPT_DIR}/.tmp/loss_pretrain.png")
+#plt.show()
 #
 #model.save_to(gpt_model_pretrain_pt)
 
@@ -1106,8 +1108,239 @@ gpt_model_sft_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_sft.pt"
 #plt.ylabel("loss")
 #plt.grid(True)
 #plt.savefig(f"{SCRIPT_DIR}/.tmp/loss_sft.png")
+#plt.show()
 #
 #model.save_to(gpt_model_sft_pt)
+
+
+
+# GRPO group relative policy optimization
+
+gpt_model_grpo_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_grpo.pt"
+
+# hyper param
+learning_rate = 7e-6
+max_iters = 500
+n_update_per_generation = 2  # update count / generated data
+eval_interval = 10
+epsilon = 0.2
+group_size = 8  # sampling generated data count from model
+batch_size = 32
+
+tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
+model = GPT.load_from(gpt_model_sft_pt, device = device)
+optimizer = torch.optim.AdamW(model.parameters(), lr = learning_rate)
+
+old_model = GPT.load_from(gpt_model_sft_pt, device = device)
+old_model.eval()
+
+
+class GRPODataset(Dataset):
+    def __init__(self, tokenizer: BPETokenizer) -> None:
+        self.tokenizer: BPETokenizer = tokenizer
+        self.data: list[tuple[str, int]] = []
+
+        for i in range(1, 10):
+            for j in range(1, 10):
+                prompt: str = f"### Instruction:\n{i}+{j}=\n\n### Response:\n"
+                gt: int = i + j
+                self.data.append((prompt, gt))
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: int) -> tuple[str, int]:
+        return self.data[idx]
+
+    def get_batch(
+            self,
+            prompts: list[str],
+            responses: list[str],
+            device: torch.device,
+    ) -> tuple[Tensor, Tensor]:
+        all_ids: list[list[int]] = []
+        all_masks: list[list[int]] = []
+
+        for prompt, response in zip(prompts, responses):
+            prompt_ids: list[int] = self.tokenizer.encode(prompt)
+            response_ids: list[int] = self.tokenizer.encode(response)
+
+            input_ids: list[int] = prompt_ids + response_ids
+            mask: list[int] = [0] * len(prompt_ids) + [1] * len(response_ids)
+
+            all_ids.append(input_ids)
+            all_masks.append(mask)
+
+        # padding
+        max_len: int = max(len(ids) for ids in all_ids)
+        padded_ids: list[list[int]] = []
+        padded_masks: list[list[int]] = []
+        for ids, mask in zip(all_ids, all_masks):
+            pad_len: int = max_len - len(ids)
+            padded_ids.append(ids + [0] * pad_len)
+            padded_masks.append(mask + [0] * pad_len)
+
+        ids_tensor: Tensor = torch.tensor(padded_ids, dtype = torch.long, device = device)
+        masks_tensor: Tensor = torch.tensor(padded_masks, dtype = torch.float, device = device)
+
+        return (ids_tensor, masks_tensor)
+
+
+def calculate_reward(ground_truth: int, response: str) -> float:
+    try:
+        matches = re.findall(r"(-?\d+)", response)
+        if matches:
+            predicted: int = int(matches[-1])  # last val
+            return 1.0 if predicted == ground_truth else 0.0
+        return 0.0
+    except:
+        return 0.0
+
+
+def generate_group(
+        model: GPT,
+        tokenizer: BPETokenizer,
+        prompts: list[str],
+        gts: list[int],
+        group_size: int,
+) -> tuple[list[str], list[str], Tensor]:
+    all_prompts: list[str] = []
+    all_responses: list[str] = []
+    all_advantages: list[Tensor] = []
+
+    for prompt, gt in zip(prompts, gts):
+        responses: list[str] = []
+        for _ in range(group_size):
+            full_text: str = generate(model, tokenizer, prompt, temperature = 1.0)
+            response: str = full_text[len(prompt):]  # cut off prompt
+            responses.append(response)
+
+        # (group_size,)
+        rewards: Tensor = torch.tensor([calculate_reward(gt, r) for r in responses])
+        advantages: Tensor = rewards - rewards.mean()
+
+        for response, advantage in zip(responses, advantages):
+            all_prompts.append(prompt)
+            all_responses.append(response)
+            all_advantages.append(advantage)
+
+    # (group_size * prompts size,)
+    return (all_prompts, all_responses, torch.stack(all_advantages))
+
+
+def compute_probs(model: GPT, input_ids: Tensor) -> Tensor:
+    logits: Tensor = model(input_ids)  # (B, C) -> (B, C, V)
+    probs: Tensor = F.softmax(logits[:, :-1, :], dim = -1)  # (B, C - 1, V)
+    labels: Tensor = input_ids[:, 1:]  # (B, C-1)
+
+    token_probs: Tensor = torch.gather(  # (B, C - 1, 1)
+            probs,
+            dim = -1,
+            index = labels.unsqueeze(-1),
+    ).squeeze(-1)  # (B, C - 1)
+
+    return token_probs
+
+
+def grpo_loss(
+        model: GPT,
+        old_model: GPT,
+        ids: Tensor,
+        mask: Tensor,
+        advantages: Tensor,
+        epsilon: float = 0.2,
+) -> Tensor:
+    probs: Tensor = compute_probs(model, ids)  # (B, C) -> (B, C, V)
+    with torch.no_grad():
+        old_probs: Tensor = compute_probs(old_model, ids)
+
+    # probability rate per token
+    ratio: Tensor = probs / (old_probs + 1e-8)  # (B, C, V)
+    advantages = advantages.unsqueeze(-1)  # (B, C) -> (B, C, 1)
+
+    # (B, C, V)
+    unclipped: Tensor = ratio * advantages
+    clipped: Tensor = torch.clamp(ratio, 1 - epsilon, 1 + epsilon) * advantages
+
+    mask = mask[:, 1:]  # for label mask, probs are 1 shifted from ids
+    token_objective: Tensor = torch.min(unclipped, clipped) * mask
+
+    n_samples: int = ids.size(0)  # batch x group
+    return -token_objective.sum() / n_samples
+
+
+
+# learning loop
+
+accuracies = []
+current_accuracy = 0.0
+
+grpo_dataset = GRPODataset(tokenizer)
+dataloader = DataLoader(grpo_dataset, batch_size = batch_size, shuffle = True)
+data_iter = cycle(dataloader)
+
+pbar = tqdm(range(max_iters))
+for i in pbar:
+    # get batch data
+    prompts, gts = next(data_iter)
+
+    # update old model <- latest model
+    old_model.load_state_dict(model.state_dict())
+
+    # generate samples on old model, and calculate reward and advantage
+    all_prompts, all_responses, all_advantages = generate_group(
+            old_model,
+            tokenizer,
+            prompts,
+            gts,
+            group_size,
+    )
+
+    # create batch data for learning
+    grpo_ids, grpo_mask = grpo_dataset.get_batch(all_prompts, all_responses, device)
+    all_advantages = all_advantages.to(device)
+
+    # learning loop
+    for _ in range(n_update_per_generation):
+        optimizer.zero_grad()
+
+        loss = grpo_loss(model, old_model, grpo_ids, grpo_mask, all_advantages, epsilon)
+
+        loss.backward()
+
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0)  # grad clipping
+
+        optimizer.step()
+
+    # evaluate
+    if i % eval_interval == 0:
+        model.eval()
+
+        correct = 0
+        total = 0
+
+        with torch.no_grad():
+            for prompt, gt in grpo_dataset.data:
+                response = generate(model, tokenizer, prompt, temperature = 0)
+                reward = calculate_reward(gt, response)
+                correct += reward > 0
+                total += 1
+
+        model.train()
+
+        current_accuracy = correct / total * 100
+        accuracies.append(current_accuracy)
+
+    pbar.set_postfix({"loss": f"{loss.item():.4f}", "acc": f"{current_accuracy:.2f}%"})
+
+plt.plot(accuracies)
+plt.xlabel("iteration")
+plt.ylabel("accurate")
+plt.grid(True)
+plt.savefig(f"{SCRIPT_DIR}/.tmp/accurate_grpo.png")
+plt.show()
+
+model.save_to(gpt_model_grpo_pt)
 
 
 
@@ -1121,7 +1354,8 @@ def format_prompt(user_message):
     return f"### Instruction:\n{user_message}\n\n### Response:\n"
 
 tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
-model = GPT.load_from(gpt_model_sft_pt, device = device)
+#model = GPT.load_from(gpt_model_sft_pt, device = device)
+model = GPT.load_from(gpt_model_grpo_pt, device = device)
 
 while True:
     user_input = input("\nYou: ").strip()
@@ -1130,7 +1364,7 @@ while True:
         continue
 
     if user_input == "exit":
-        break
+        exit()
 
     prompt = format_prompt(user_input)
     response = generate(model, tokenizer, prompt, max_new_tokens, temperature)
