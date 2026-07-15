@@ -22,6 +22,7 @@ from collections.abc import Iterable
 import pickle
 from torch.utils.data import Dataset, DataLoader
 from itertools import cycle
+import json
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 Path(f"{SCRIPT_DIR}/.tmp").mkdir(parents = True, exist_ok = True)
@@ -785,7 +786,7 @@ class GPT(nn.Module):
 
 
 
-gpt_model_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_pt"
+gpt_model_pretrain_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_pretrain.pt"
 
 #vocab_size = 1000
 #max_context_len = 256
@@ -809,7 +810,7 @@ gpt_model_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_pt"
 #logits = model(dummy_input)
 #print(f"output logits.shape = {logits.shape}")
 #
-#model.save_to(gpt_model_pt)
+#model.save_to(gpt_model_pretrain_pt)
 
 
 
@@ -837,8 +838,7 @@ class TokenDataset(Dataset):
 
 
 ids = np.fromfile(tiny_codes_bin, dtype = np.uint16)
-print(f"ids len = {len(ids)}")
-
+#print(f"ids len = {len(ids)}")
 dataset = TokenDataset(ids, context_len = 256)
 dataloader = DataLoader(dataset, batch_size = 32, shuffle = True)
 
@@ -863,64 +863,66 @@ model_pretrain_pt = f"{SCRIPT_DIR}/.tmp/model_pretrain_pt"
 
 
 
-# hyper params
-context_len = 256
-vocab_size = 1000
-batch_size = 32
-learning_rate = 3e-4
-max_iters = 20000
-embed_dim = 384
-head_count = 6
-layer_count = 6
-ffn_hidden_dim = 4 * embed_dim
-dropout_rate = 0.1
-
-model = GPT(
-        vocab_size,
-        context_len,
-        embed_dim,
-        head_count,
-        layer_count,
-        ffn_hidden_dim,
-        dropout_rate,
-).to(device)
-
-optimizer = torch.optim.AdamW(model.parameters(), lr = learning_rate)
-
-
-losses = []
-data_iter = cycle(dataloader)  # infinite loop
-pbar = tqdm(range(max_iters))
-
-for i in pbar:
-    # (B, C)
-    batch_x, batch_y = next(data_iter)
-    batch_x, batch_y = batch_x.to(device), batch_y.to(device)
-
-    # (B, C) -> (B, C, V)
-    logits = model(batch_x)
-
-    # logits : (B, C, V) -> (B * C, V)
-    # batch_y : (B, C) -> (B * C,)
-    # loss is calculated by V num predicted val and 1 label val.
-    loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
-
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-
-    losses.append(loss.item())
-
-    pbar.set_postfix({"loss": f"{loss.item():.4f}"})
-
-plt.figure(figsize = (10, 6))
-plt.plot(losses)
-plt.xlabel("iteration")
-plt.ylabel("loss")
-plt.grid(True)
-plt.savefig(f"{SCRIPT_DIR}/.tmp/loss_pretrain.png")
-
-model.save_to(model_pretrain_pt)
+# Pre-Training GPT
+#
+## hyper params
+#context_len = 256
+#vocab_size = 1000
+#batch_size = 32
+#learning_rate = 3e-4
+#max_iters = 20000
+#embed_dim = 384
+#head_count = 6
+#layer_count = 6
+#ffn_hidden_dim = 4 * embed_dim
+#dropout_rate = 0.1
+#
+#model = GPT(
+#        vocab_size,
+#        context_len,
+#        embed_dim,
+#        head_count,
+#        layer_count,
+#        ffn_hidden_dim,
+#        dropout_rate,
+#).to(device)
+#
+#optimizer = torch.optim.AdamW(model.parameters(), lr = learning_rate)
+#
+#
+#losses = []
+#data_iter = cycle(dataloader)  # infinite loop
+#pbar = tqdm(range(max_iters))
+#
+#for i in pbar:
+#    # (B, C)
+#    batch_x, batch_y = next(data_iter)
+#    batch_x, batch_y = batch_x.to(device), batch_y.to(device)
+#
+#    # (B, C) -> (B, C, V)
+#    logits = model(batch_x)
+#
+#    # logits : (B, C, V) -> (B * C, V)
+#    # batch_y : (B, C) -> (B * C,)
+#    # loss is calculated by V num predicted val and 1 label val.
+#    loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
+#
+#    optimizer.zero_grad()
+#    loss.backward()
+#    optimizer.step()
+#
+#    losses.append(loss.item())
+#
+#    pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+#
+#plt.figure(figsize = (10, 6))
+#plt.plot(losses)
+#plt.xlabel("iteration")
+#plt.ylabel("loss")
+#plt.grid(True)
+#plt.savefig(f"{SCRIPT_DIR}/.tmp/loss_pretrain.png")
+#
+#model.save_to(model_pretrain_pt)
 
 
 
@@ -966,16 +968,145 @@ def generate(
 
 
 
-prompt = "def"
-max_new_tokens = 200
-temperature = 1.0
+#prompt = "def"
+#max_new_tokens = 200
+#temperature = 1.0
+#
+#tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
+#model = GPT.load_from(gpt_model_pretrain_pt)
+#
+#for i in range(5):
+#    print(f"------------ sample {i + 1} ------------")
+#    generated_text = generate(model, tokenizer, prompt, max_new_tokens, temperature)
+#    print(generated_text)
+#    print()
+
+
+
+tiny_codes_sft_json = f"{SCRIPT_DIR}/dataset/codebot/tiny_codes_sft.json"
+
+#tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
+#
+#with open(tiny_codes_sft_json) as f:
+#    data = json.load(f)
+#
+#item = data[0]
+#print(f"data[0] = {item}")
+#
+## alpaca format
+#text = f"### Instruction:\n{item["instruction"]}\n\n### Response:\n{item["response"]}<|endoftext|>"
+#print(f"alpaca text = {text}")
+#
+#ids_list = tokenizer.encode(text)
+#print(f"ids = {ids_list}")
+
+
+
+class SFTDataset(Dataset):
+    def __init__(self, data_path: str, tokenizer: BPETokenizer, context_len: int) -> None:
+        self.tokenizer: BPETokenizer = tokenizer
+        self.context_len: int = context_len
+        self.samples: list[tuple[list[int], list[int]]] = []
+
+        with open(data_path) as f:
+            data = json.load(f)
+        for item in data:
+            ids: list[int]
+            labels: list[int]
+            ids, labels = self._create_sample(
+                    item["instruction"],
+                    item["response"],
+            )
+            self.samples.append((ids, labels))
+
+    def _create_sample(self, instruction: str, response: str) -> tuple[list[int], list[int]]:
+        prompt: str = f"### Instructions:\n{instruction}\n\n### Response:\n"
+        answer: str = f"{response}<|endoftext|>"
+
+        # torkenize
+        prompt_ids: list[int] = self.tokenizer.encode(prompt)
+        answer_ids: list[int] = self.tokenizer.encode(answer)
+
+        # input/label
+        input_ids: list[int] = prompt_ids + answer_ids
+        label_ids: list[int] = [-100] * len(prompt_ids) + answer_ids
+
+        # shift 1
+        input_ids = input_ids[:-1]
+        label_ids = label_ids[1:]
+
+        padding_len: int = self.context_len - len(input_ids)
+        if padding_len > 0:
+            # short input/label, add padding
+            input_ids = input_ids + [0] * padding_len
+            label_ids = label_ids + [-100] * padding_len
+        elif padding_len < 0:
+            # too long input/label, cut out
+            input_ids = input_ids[:self.context_len]
+            label_ids = label_ids[:self.context_len]
+
+        return (input_ids, label_ids)
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor]:
+        ids: list[int]
+        labels: list[int]
+        ids, labels = self.samples[idx]
+        ids_tensor: Tensor = torch.tensor(ids, dtype = torch.long)
+        labels_tensor: Tensor = torch.tensor(labels, dtype = torch.long)
+        return (ids_tensor, labels_tensor)
+
+
+
+# Supervised Fine Tuning
+#
+
+gpt_model_sft_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_sft.pt"
+
+# hyper param
+context_len = 256
+batch_size = 32
+learning_rate = 3e-4
+max_iters = 500
 
 tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
-model = GPT.load_from(gpt_model_pt)
+sft_dataset = SFTDataset(tiny_codes_sft_json, tokenizer, context_len)
+dataloader = DataLoader(sft_dataset, batch_size = batch_size, shuffle = True)
 
-for i in range(5):
-    print(f"------------ sample {i + 1} ------------")
-    generated_text = generate(model, tokenizer, prompt, max_new_tokens, temperature)
-    print(generated_text)
-    print()
+model = GPT.load_from(gpt_model_pretrain_pt, device = device)
+optimizer = torch.optim.AdamW(model.parameters(), lr = learning_rate)
+
+# train
+losses = []
+data_iter = cycle(dataloader)
+pbar = tqdm(range(max_iters))
+
+for i in pbar:
+    batch_x, batch_y = next(data_iter)
+    batch_x, batch_y = batch_x.to(device), batch_y.to(device)
+
+    logits = model(batch_x)
+    loss = F.cross_entropy(
+            logits.view(-1, logits.size(-1)),  # (B, C, V) -> (B * C, V)
+            batch_y.view(-1),  # (B, C) -> (B * C,)
+            ignore_index = -100,  # ignore for loss calc
+    )
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    losses.append(loss.item())
+    pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+
+plt.figure(figsize = (10, 6))
+plt.plot(losses)
+plt.xlabel("iteration")
+plt.ylabel("loss")
+plt.grid(True)
+plt.savefig(f"{SCRIPT_DIR}/.tmp/loss_sft.png")
+
+model.save_to(gpt_model_sft_pt)
 
