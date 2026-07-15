@@ -859,7 +859,6 @@ def get_device() -> torch.device:
 
 
 device: torch.device = get_device()
-model_pretrain_pt = f"{SCRIPT_DIR}/.tmp/model_pretrain_pt"
 
 
 
@@ -922,7 +921,7 @@ model_pretrain_pt = f"{SCRIPT_DIR}/.tmp/model_pretrain_pt"
 #plt.grid(True)
 #plt.savefig(f"{SCRIPT_DIR}/.tmp/loss_pretrain.png")
 #
-#model.save_to(model_pretrain_pt)
+#model.save_to(gpt_model_pretrain_pt)
 
 
 
@@ -1065,48 +1064,82 @@ class SFTDataset(Dataset):
 
 gpt_model_sft_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_sft.pt"
 
-# hyper param
-context_len = 256
-batch_size = 32
-learning_rate = 3e-4
-max_iters = 500
+## hyper param
+#context_len = 256
+#batch_size = 32
+#learning_rate = 3e-4
+#max_iters = 500
+#
+#tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
+#sft_dataset = SFTDataset(tiny_codes_sft_json, tokenizer, context_len)
+#dataloader = DataLoader(sft_dataset, batch_size = batch_size, shuffle = True)
+#
+#model = GPT.load_from(gpt_model_pretrain_pt, device = device)
+#optimizer = torch.optim.AdamW(model.parameters(), lr = learning_rate)
+#
+## train
+#losses = []
+#data_iter = cycle(dataloader)
+#pbar = tqdm(range(max_iters))
+#
+#for i in pbar:
+#    batch_x, batch_y = next(data_iter)
+#    batch_x, batch_y = batch_x.to(device), batch_y.to(device)
+#
+#    logits = model(batch_x)
+#    loss = F.cross_entropy(
+#            logits.view(-1, logits.size(-1)),  # (B, C, V) -> (B * C, V)
+#            batch_y.view(-1),  # (B, C) -> (B * C,)
+#            ignore_index = -100,  # ignore for loss calc
+#    )
+#
+#    optimizer.zero_grad()
+#    loss.backward()
+#    optimizer.step()
+#
+#    losses.append(loss.item())
+#    pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+#
+#plt.figure(figsize = (10, 6))
+#plt.plot(losses)
+#plt.xlabel("iteration")
+#plt.ylabel("loss")
+#plt.grid(True)
+#plt.savefig(f"{SCRIPT_DIR}/.tmp/loss_sft.png")
+#
+#model.save_to(gpt_model_sft_pt)
+
+
+
+# interactive
+#
+
+max_new_tokens = 200
+temperature = 1.0
+
+def format_prompt(user_message):
+    return f"### Instruction:\n{user_message}\n\n### Response:\n"
 
 tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
-sft_dataset = SFTDataset(tiny_codes_sft_json, tokenizer, context_len)
-dataloader = DataLoader(sft_dataset, batch_size = batch_size, shuffle = True)
+model = GPT.load_from(gpt_model_sft_pt, device = device)
 
-model = GPT.load_from(gpt_model_pretrain_pt, device = device)
-optimizer = torch.optim.AdamW(model.parameters(), lr = learning_rate)
+while True:
+    user_input = input("\nYou: ").strip()
 
-# train
-losses = []
-data_iter = cycle(dataloader)
-pbar = tqdm(range(max_iters))
+    if not user_input:
+        continue
 
-for i in pbar:
-    batch_x, batch_y = next(data_iter)
-    batch_x, batch_y = batch_x.to(device), batch_y.to(device)
+    if user_input == "exit":
+        break
 
-    logits = model(batch_x)
-    loss = F.cross_entropy(
-            logits.view(-1, logits.size(-1)),  # (B, C, V) -> (B * C, V)
-            batch_y.view(-1),  # (B, C) -> (B * C,)
-            ignore_index = -100,  # ignore for loss calc
-    )
+    prompt = format_prompt(user_input)
+    response = generate(model, tokenizer, prompt, max_new_tokens, temperature)
 
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+    if "### Response:" in response:
+        response = response.split("### Response:")[-1].strip()
 
-    losses.append(loss.item())
-    pbar.set_postfix({"loss": f"{loss.item():.4f}"})
-
-plt.figure(figsize = (10, 6))
-plt.plot(losses)
-plt.xlabel("iteration")
-plt.ylabel("loss")
-plt.grid(True)
-plt.savefig(f"{SCRIPT_DIR}/.tmp/loss_sft.png")
-
-model.save_to(gpt_model_sft_pt)
+    if "\n" in response:
+        print(f"Bot:\n{response}")
+    else:
+        print(f"Bot: {response}")
 
