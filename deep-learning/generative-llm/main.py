@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import os
 from scipy.stats import norm  # type: ignore[import-untyped]
-from typing import Any, Self
+from typing import Any, Self, Iterator
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -23,12 +23,16 @@ import pickle
 from torch.utils.data import Dataset, DataLoader
 from itertools import cycle
 import json
+from multiprocessing import Pool
+import shutil
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 Path(f"{SCRIPT_DIR}/.tmp").mkdir(parents = True, exist_ok = True)
 
 np.random.seed(0)
 torch.manual_seed(0)
+
+INT_INF = 1 << 60
 
 
 
@@ -90,13 +94,14 @@ class ByteTokenizer:
 
 def count_pairs(
         ids: list[int],
+        weight: int = 1,
         counts: dict[tuple[int, int], int]|None = None,
 ) -> dict[tuple[int,int], int]:
     if counts is None:
         counts = defaultdict(int)  # default = 0
 
     for pair in zip(ids, ids[1:]):
-        counts[pair] += 1
+        counts[pair] += weight
     return counts
 
 
@@ -129,45 +134,82 @@ def merge(ids: list[int], pair: tuple[int, int], new_id: int) -> list[int]:
 
 
 
-def train_bpe(
-        input_text: str,
-        target_vocab_size: int,
-        end_token = "<|endoftext|>",
-) -> dict[tuple[int, int], int]:
-    texts: list[str] = input_text.split(end_token)
+#def train_bpe(
+#        input_text: str,
+#        target_vocab_size: int,
+#        end_token = "<|endoftext|>",
+#) -> dict[tuple[int, int], int]:
+#    texts: list[str] = input_text.split(end_token)
+#
+#    # count pre-token
+#    pretoken_vs_count: dict[str, int] = defaultdict(int)
+#    for text in tqdm(texts, desc = "Pretokenizing"):
+#        for pretoken in pretokenize(text):
+#            pretoken_vs_count[pretoken] += 1
+#
+#    # pretoken -> id
+#    ids_vs_count: dict[tuple[int, ...], int] = {
+#            tuple(pretoken.encode("utf-8")): count for pretoken, count in pretoken_vs_count.items()
+#    }
+#
+#    # 256 : default vocal size (1 byte)
+#    # 1 : end token
+#    num_merges: int = target_vocab_size - 256 - 1
+#    merge_rules: dict[tuple[int, int], int] = {}
+#
+#    pair_vs_count: dict[tuple[int,int], int] = defaultdict(int)
+#    pair_vs_ids: dict[tuple[int, int], set[tuple[int, ...]]] = defaultdict(set)  # cache
+#    for ids, count in ids_vs_count.items():
+#        count_pairs(list(ids), count, pair_vs_count)
+#        for pair in zip(ids, ids[1:]):  # [0, 1, 2, 3] and [1, 2, 3] -> (0, 1), (1, 2), (2, 3)
+#            pair_vs_ids[pair].add(ids)  # register to cache
+#
+#    for step in tqdm(range(num_merges), desc = "Training BPE"):
+#        if not pair_vs_count:
+#            # NOP, there is no pair.
+#            break
+#
+#        most_available_pair: tuple[int, int] = max(
+#                pair_vs_count,
+#                #key = lambda pair: pair_vs_count[pair],
+#                key = lambda pair: (pair_vs_count[pair], pair[0], pair[1]),
+#        )
+#
+#        new_id: int = 256 + step
+#        merge_rules[most_available_pair] = new_id
+#
+#        # get cache and delete
+#        affected_ids: set[tuple[int, ...]] = pair_vs_ids[most_available_pair]
+#        del pair_vs_ids[most_available_pair]
+#
+#        for ids in affected_ids:
+#            ids_count: int = ids_vs_count[ids]
+#            new_ids: list[int] = merge(list(ids), most_available_pair, new_id)
+#
+#            # update related ids
+#            del ids_vs_count[ids]
+#            ids_vs_count[tuple(new_ids)] = ids_count
+#
+#            # update old
+#            old_pair_vs_count: dict[tuple[int, int], int] = count_pairs(list(ids))
+#            for pair, count in old_pair_vs_count.items():
+#                # pair count in ids(pretoken) x ids(pretoken) count in text
+#                #     = pair count in same pretoken in text. != total pair count in text
+#                pair_vs_count[pair] -= count * ids_count
+#                if pair_vs_count[pair] <= 0:
+#                    del pair_vs_count[pair]
+#                pair_vs_ids[pair].discard(ids)  # delete from cache set
+#
+#            # update new
+#            new_pair_vs_count: dict[tuple[int, int], int] = count_pairs(new_ids)
+#            for pair, count in new_pair_vs_count.items():
+#                # pair count in ids(pretoken) x ids(pretoken) count in text
+#                #     = pair count in same pretoken in text. != total pair count in text
+#                pair_vs_count[pair] += count * ids_count
+#                pair_vs_ids[pair].add(tuple(new_ids))
+#
+#    return merge_rules
 
-    ids_list: list[list[int]] = []
-    for text in texts:
-        for pretoken in pretokenize(text):
-            ids_list.append(list(pretoken.encode("utf-8")))
-
-    # 256 : default vocal size (1 byte)
-    # 1 : end token
-    num_merges: int = target_vocab_size - 256 - 1
-    merge_rules: dict[tuple[int, int], int] = {}
-
-    for step in tqdm(range(num_merges), desc = "Training BPE"):
-        pair_vs_count: dict[tuple[int,int], int] = defaultdict(int)
-        for ids in ids_list:
-            pair_vs_count = count_pairs(ids, pair_vs_count)
-
-        if not pair_vs_count:
-            # NOP, there is no pair.
-            break
-
-        most_available_pair: tuple[int, int] = max(
-                pair_vs_count,
-                #key = lambda pair: pair_vs_count[pair],
-                key = lambda pair: (pair_vs_count[pair], pair[0], pair[1]),
-        )
-
-        new_id: int = 256 + step
-        merge_rules[most_available_pair] = new_id
-
-        for i in range(len(ids_list)):
-            ids_list[i] = merge(ids_list[i], most_available_pair, new_id)
-
-    return merge_rules
 
 
 #text = "Hello world! This is BPE training."
@@ -203,9 +245,23 @@ class BPETokenizer:
     def _encode_text(self, text: str) -> list[int]:
         ids: list[int] = list(text.encode("utf-8"))
 
-        # keep merge order
-        for pair, new_id in self.merge_rules.items():
-            ids = merge(ids, pair, new_id)
+        def get_merge_priority(pair: tuple[int, int]) -> int:
+            return self.merge_rules.get(pair, INT_INF)  # inf = lowest priority
+
+        while len(ids) > 1:
+            # current pair and count
+            pair_vs_count: dict[tuple[int, int], int] = count_pairs(ids)
+
+            most_available_pair: tuple[int, int] = min(
+                    pair_vs_count,
+                    key = get_merge_priority,
+            )  # select most high-priority (earliest learned) pair
+
+            if most_available_pair not in self.merge_rules:
+                break
+
+            new_id: int = self.merge_rules[most_available_pair]
+            ids = merge(ids, most_available_pair, new_id)
 
         return ids
 
@@ -230,6 +286,92 @@ class BPETokenizer:
                     all_ids.extend(ids)
 
         return all_ids
+
+    # args: file_path, start, end, cache_dir, chunk_idx
+    # return: (cache_file_path, len(ids))
+    def _encode_chunk(self, args) -> tuple[str, int]:
+        file_path: str
+        start: int
+        end: int
+        cache_dir: str
+        chunk_idx: int
+        file_path, start, end, cache_dir, chunk_idx = args
+
+        with open(file_path, "rb") as f:
+            f.seek(start)
+            chunk_byte: bytes = f.read(end - start)
+            chunk_text: str = chunk_byte.decode("utf-8", errors = "ignore")
+
+            ids: list[int] = self.encode(chunk_text)
+
+        # save to cache
+        cache_file: str = f"{cache_dir}/bpe_ids_chunk_{chunk_idx:08d}.npy"
+        np.array(ids, dtype = np.uint16).tofile(cache_file)
+
+        return (cache_file, len(ids))
+
+    def encode_file(
+            self,
+            file_path: str,
+            output_file: str,
+            num_processes = 8,
+            num_chunks = 64,
+            cache_dir = ".cache",
+    ) -> int:
+        os.makedirs(cache_dir, exist_ok = True)
+
+        try:
+            chunk_boundaries: list[int] = find_chunk_boundaries(file_path, num_chunks)
+            total_chunks: int = len(chunk_boundaries) - 1
+
+            chunk_info_list = []
+
+            for i in range(total_chunks):
+                start: int = chunk_boundaries[i]
+                end: int = chunk_boundaries[i + 1]
+                chunk_info_list.append((
+                        file_path,
+                        start,
+                        end,
+                        cache_dir,
+                        i,
+                ))
+
+            with Pool(processes = num_processes) as pool:
+                cache_results: list[tuple[str, int]] = list(tqdm(
+                        pool.imap(self._encode_chunk, chunk_info_list),
+                        total = len(chunk_info_list),
+                        desc = "Encoding chunks",
+                ))
+
+            cache_files: list[str] = [r[0] for r in cache_results]
+            token_counts: list[int] = [r[1] for r in cache_results]
+            total_tokens: int = sum(token_counts)
+
+            # memmap for output
+            dtype = np.uint16
+            out_file: np.memmap = np.memmap(
+                    output_file,
+                    dtype = dtype,
+                    mode = "w+",
+                    shape = (total_tokens,),
+            )
+
+            # write cache to out file
+            idx: int = 0
+            for cache_file in cache_files:
+                chunk_data: np.ndarray = np.fromfile(cache_file, dtype = dtype)
+                out_file[idx : idx + len(chunk_data)] = chunk_data
+                idx += len(chunk_data)
+
+            out_file.flush()
+            del out_file
+
+        finally:
+            # delete cache
+            shutil.rmtree(cache_dir)
+
+        return total_tokens
 
     def decode(self, ids: list[int]) -> str:
         bytes_list: list[bytes] = [self.id_vs_bytes[i] for i in ids]
@@ -274,10 +416,15 @@ class BPETokenizer:
 
 
 
-def pretokenize(text: str) -> list[str]:
+#def pretokenize(text: str) -> list[str]:
+def pretokenize(text: str) -> Iterator[str]:
     # regex in GPT-2
     pattern: str = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-    return regex.findall(pattern, text)
+
+    #return regex.findall(pattern, text)
+    for m in regex.finditer(pattern, text):
+        yield m.group(0)
+
 
 
 #text = "Hello! I'm fine."
@@ -837,10 +984,10 @@ class TokenDataset(Dataset):
         return (x, y)
 
 
-ids = np.fromfile(tiny_codes_bin, dtype = np.uint16)
-#print(f"ids len = {len(ids)}")
-dataset = TokenDataset(ids, context_len = 256)
-dataloader = DataLoader(dataset, batch_size = 32, shuffle = True)
+#ids = np.fromfile(tiny_codes_bin, dtype = np.uint16)
+##print(f"ids len = {len(ids)}")
+#dataset = TokenDataset(ids, context_len = 256)
+#dataloader = DataLoader(dataset, batch_size = 32, shuffle = True)
 
 
 #for inputs, labels in dataloader:
@@ -1118,21 +1265,21 @@ gpt_model_sft_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_sft.pt"
 
 gpt_model_grpo_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_grpo.pt"
 
-# hyper param
-learning_rate = 7e-6
-max_iters = 500
-n_update_per_generation = 2  # update count / generated data
-eval_interval = 10
-epsilon = 0.2
-group_size = 8  # sampling generated data count from model
-batch_size = 32
-
-tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
-model = GPT.load_from(gpt_model_sft_pt, device = device)
-optimizer = torch.optim.AdamW(model.parameters(), lr = learning_rate)
-
-old_model = GPT.load_from(gpt_model_sft_pt, device = device)
-old_model.eval()
+## hyper param
+#learning_rate = 7e-6
+#max_iters = 500
+#n_update_per_generation = 2  # update count / generated data
+#eval_interval = 10
+#epsilon = 0.2
+#group_size = 8  # sampling generated data count from model
+#batch_size = 32
+#
+#tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
+#model = GPT.load_from(gpt_model_sft_pt, device = device)
+#optimizer = torch.optim.AdamW(model.parameters(), lr = learning_rate)
+#
+#old_model = GPT.load_from(gpt_model_sft_pt, device = device)
+#old_model.eval()
 
 
 class GRPODataset(Dataset):
@@ -1272,108 +1419,465 @@ def grpo_loss(
 
 # learning loop
 
-accuracies = []
-current_accuracy = 0.0
-
-grpo_dataset = GRPODataset(tokenizer)
-dataloader = DataLoader(grpo_dataset, batch_size = batch_size, shuffle = True)
-data_iter = cycle(dataloader)
-
-pbar = tqdm(range(max_iters))
-for i in pbar:
-    # get batch data
-    prompts, gts = next(data_iter)
-
-    # update old model <- latest model
-    old_model.load_state_dict(model.state_dict())
-
-    # generate samples on old model, and calculate reward and advantage
-    all_prompts, all_responses, all_advantages = generate_group(
-            old_model,
-            tokenizer,
-            prompts,
-            gts,
-            group_size,
-    )
-
-    # create batch data for learning
-    grpo_ids, grpo_mask = grpo_dataset.get_batch(all_prompts, all_responses, device)
-    all_advantages = all_advantages.to(device)
-
-    # learning loop
-    for _ in range(n_update_per_generation):
-        optimizer.zero_grad()
-
-        loss = grpo_loss(model, old_model, grpo_ids, grpo_mask, all_advantages, epsilon)
-
-        loss.backward()
-
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0)  # grad clipping
-
-        optimizer.step()
-
-    # evaluate
-    if i % eval_interval == 0:
-        model.eval()
-
-        correct = 0
-        total = 0
-
-        with torch.no_grad():
-            for prompt, gt in grpo_dataset.data:
-                response = generate(model, tokenizer, prompt, temperature = 0)
-                reward = calculate_reward(gt, response)
-                correct += reward > 0
-                total += 1
-
-        model.train()
-
-        current_accuracy = correct / total * 100
-        accuracies.append(current_accuracy)
-
-    pbar.set_postfix({"loss": f"{loss.item():.4f}", "acc": f"{current_accuracy:.2f}%"})
-
-plt.plot(accuracies)
-plt.xlabel("iteration")
-plt.ylabel("accurate")
-plt.grid(True)
-plt.savefig(f"{SCRIPT_DIR}/.tmp/accurate_grpo.png")
-plt.show()
-
-model.save_to(gpt_model_grpo_pt)
+#accuracies = []
+#current_accuracy = 0.0
+#
+#grpo_dataset = GRPODataset(tokenizer)
+#dataloader = DataLoader(grpo_dataset, batch_size = batch_size, shuffle = True)
+#data_iter = cycle(dataloader)
+#
+#pbar = tqdm(range(max_iters))
+#for i in pbar:
+#    # get batch data
+#    prompts, gts = next(data_iter)
+#
+#    # update old model <- latest model
+#    old_model.load_state_dict(model.state_dict())
+#
+#    # generate samples on old model, and calculate reward and advantage
+#    all_prompts, all_responses, all_advantages = generate_group(
+#            old_model,
+#            tokenizer,
+#            prompts,
+#            gts,
+#            group_size,
+#    )
+#
+#    # create batch data for learning
+#    grpo_ids, grpo_mask = grpo_dataset.get_batch(all_prompts, all_responses, device)
+#    all_advantages = all_advantages.to(device)
+#
+#    # learning loop
+#    for _ in range(n_update_per_generation):
+#        optimizer.zero_grad()
+#
+#        loss = grpo_loss(model, old_model, grpo_ids, grpo_mask, all_advantages, epsilon)
+#
+#        loss.backward()
+#
+#        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0)  # grad clipping
+#
+#        optimizer.step()
+#
+#    # evaluate
+#    if i % eval_interval == 0:
+#        model.eval()
+#
+#        correct = 0
+#        total = 0
+#
+#        with torch.no_grad():
+#            for prompt, gt in grpo_dataset.data:
+#                response = generate(model, tokenizer, prompt, temperature = 0)
+#                reward = calculate_reward(gt, response)
+#                correct += reward > 0
+#                total += 1
+#
+#        model.train()
+#
+#        current_accuracy = correct / total * 100
+#        accuracies.append(current_accuracy)
+#
+#    pbar.set_postfix({"loss": f"{loss.item():.4f}", "acc": f"{current_accuracy:.2f}%"})
+#
+#plt.plot(accuracies)
+#plt.xlabel("iteration")
+#plt.ylabel("accurate")
+#plt.grid(True)
+#plt.savefig(f"{SCRIPT_DIR}/.tmp/accurate_grpo.png")
+#plt.show()
+#
+#model.save_to(gpt_model_grpo_pt)
 
 
 
 # interactive
 #
 
-max_new_tokens = 200
-temperature = 1.0
+#max_new_tokens = 200
+#temperature = 1.0
+#
+#def format_prompt(user_message):
+#    return f"### Instruction:\n{user_message}\n\n### Response:\n"
+#
+#tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
+##model = GPT.load_from(gpt_model_sft_pt, device = device)
+#model = GPT.load_from(gpt_model_grpo_pt, device = device)
+#
+#while True:
+#    user_input = input("\nYou: ").strip()
+#
+#    if not user_input:
+#        continue
+#
+#    if user_input == "exit":
+#        exit()
+#
+#    prompt = format_prompt(user_input)
+#    response = generate(model, tokenizer, prompt, max_new_tokens, temperature)
+#
+#    if "### Response:" in response:
+#        response = response.split("### Response:")[-1].strip()
+#
+#    if "\n" in response:
+#        print(f"Bot:\n{response}")
+#    else:
+#        print(f"Bot: {response}")
 
-def format_prompt(user_message):
-    return f"### Instruction:\n{user_message}\n\n### Response:\n"
 
-tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
-#model = GPT.load_from(gpt_model_sft_pt, device = device)
-model = GPT.load_from(gpt_model_grpo_pt, device = device)
 
-while True:
-    user_input = input("\nYou: ").strip()
+print(f"# 4 : Tokenizer Advanced")
 
-    if not user_input:
-        continue
 
-    if user_input == "exit":
-        exit()
+#vocab_size = 1000
+#text = open(tiny_codes_txt).read()
+#merge_rules = train_bpe(text, vocab_size)
+#print(f"merge_rules = {len(merge_rules)}")
 
-    prompt = format_prompt(user_input)
-    response = generate(model, tokenizer, prompt, max_new_tokens, temperature)
 
-    if "### Response:" in response:
-        response = response.split("### Response:")[-1].strip()
+tiny_stories_train_txt = f"{SCRIPT_DIR}/.tmp/tiny_stories_train.txt"
+tiny_stories_valid_txt = f"{SCRIPT_DIR}/.tmp/tiny_stories_valid.txt"
 
-    if "\n" in response:
-        print(f"Bot:\n{response}")
-    else:
-        print(f"Bot: {response}")
+
+def find_chunk_boundaries(
+        file_path: str,
+        num_chunks: int,
+        end_token = "<|endoftext|>",
+) -> list[int]:
+    byte_end_token: bytes = end_token.encode("utf-8")
+
+    with open(file_path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        file_size: int = f.tell()
+        f.seek(0)
+
+        chunk_size: int = file_size // num_chunks
+
+        # chunk start pos (default)
+        chunk_boundaries: list[int] = [i * chunk_size for i in range(num_chunks)]
+        chunk_boundaries.append(file_size)  # last chunk
+
+        read_size: int = 4096
+
+        # scan end token and update boundary
+        for bnd_end_idx in range(1, len(chunk_boundaries) - 1):
+            chunk_position = chunk_boundaries[bnd_end_idx]  # start pos
+            f.seek(chunk_position)
+
+            while True:
+                buffer: bytes = f.read(read_size)
+
+                # file end
+                if buffer == b"":
+                    chunk_boundaries[bnd_end_idx] = file_size
+                    break
+
+                # search end token
+                end_position = buffer.find(byte_end_token)
+                if end_position != -1:
+                    # hit
+                    chunk_boundaries[bnd_end_idx] = chunk_position + end_position
+                    break
+
+                # for next loop
+                chunk_position += read_size
+
+    # remove dup and sort
+    return sorted(set(chunk_boundaries))
+
+
+#boundaries = find_chunk_boundaries(tiny_stories_train_txt, num_chunks = 64)
+#print(f"len(boundaries) = {len(boundaries)}")
+#print(f"boundaries[:5] = {boundaries[:5]}")
+
+
+#def train_bpe(
+#        file_path: str,
+#        target_vocab_size: int,
+#        end_token = "<|endoftext|>",
+#) -> dict[tuple[int, int], int]:
+#    chunk_boundaries: list[int] = find_chunk_boundaries(
+#            file_path,
+#            num_chunks = 64,
+#            end_token = end_token,
+#    )
+#
+#    pretoken_vs_count: dict[str, int] = defaultdict(int)
+#    with open(file_path, "rb") as f:
+#        total_chunks: int = len(chunk_boundaries) - 1
+#
+#        # count pre-token
+#        for chunk_idx in tqdm(range(total_chunks), desc = "Pretokenizing"):
+#            start: int = chunk_boundaries[chunk_idx]
+#            end: int = chunk_boundaries[chunk_idx + 1]
+#
+#            # read to mem
+#            f.seek(start)
+#            chunk_bytes: bytes = f.read(end - start)
+#            chunk_text: str = chunk_bytes.decode("utf-8", errors = "ignore")
+#
+#            # pre-tokenize
+#            texts: list[str] = chunk_text.split(end_token)
+#            for text in texts:
+#                for pretoken in pretokenize(text):
+#                    pretoken_vs_count[pretoken] += 1
+#
+#
+#    # pretoken -> id
+#    ids_vs_count: dict[tuple[int, ...], int] = {
+#            tuple(pretoken.encode("utf-8")): count for pretoken, count in pretoken_vs_count.items()
+#    }
+#
+#    # 256 : default vocal size (1 byte)
+#    # 1 : end token
+#    num_merges: int = target_vocab_size - 256 - 1
+#    merge_rules: dict[tuple[int, int], int] = {}
+#
+#    pair_vs_count: dict[tuple[int,int], int] = defaultdict(int)
+#    pair_vs_ids: dict[tuple[int, int], set[tuple[int, ...]]] = defaultdict(set)  # cache
+#    for ids, count in ids_vs_count.items():
+#        count_pairs(list(ids), count, pair_vs_count)
+#        for pair in zip(ids, ids[1:]):  # [0, 1, 2, 3] and [1, 2, 3] -> (0, 1), (1, 2), (2, 3)
+#            pair_vs_ids[pair].add(ids)  # register to cache
+#
+#    for step in tqdm(range(num_merges), desc = "Training BPE"):
+#        if not pair_vs_count:
+#            # NOP, there is no pair.
+#            break
+#
+#        most_available_pair: tuple[int, int] = max(
+#                pair_vs_count,
+#                #key = lambda pair: pair_vs_count[pair],
+#                key = lambda pair: (pair_vs_count[pair], pair[0], pair[1]),
+#        )
+#
+#        new_id: int = 256 + step
+#        merge_rules[most_available_pair] = new_id
+#
+#        # get cache and delete
+#        affected_ids: set[tuple[int, ...]] = pair_vs_ids[most_available_pair]
+#        del pair_vs_ids[most_available_pair]
+#
+#        for ids in affected_ids:
+#            ids_count: int = ids_vs_count[ids]
+#            new_ids: list[int] = merge(list(ids), most_available_pair, new_id)
+#
+#            # update related ids
+#            del ids_vs_count[ids]
+#            ids_vs_count[tuple(new_ids)] = ids_count
+#
+#            # update old
+#            old_pair_vs_count: dict[tuple[int, int], int] = count_pairs(list(ids))
+#            for pair, count in old_pair_vs_count.items():
+#                # pair count in ids(pretoken) x ids(pretoken) count in text
+#                #     = pair count in same pretoken in text. != total pair count in text
+#                pair_vs_count[pair] -= count * ids_count
+#                if pair_vs_count[pair] <= 0:
+#                    del pair_vs_count[pair]
+#                pair_vs_ids[pair].discard(ids)  # delete from cache set
+#
+#            # update new
+#            new_pair_vs_count: dict[tuple[int, int], int] = count_pairs(new_ids)
+#            for pair, count in new_pair_vs_count.items():
+#                # pair count in ids(pretoken) x ids(pretoken) count in text
+#                #     = pair count in same pretoken in text. != total pair count in text
+#                pair_vs_count[pair] += count * ids_count
+#                pair_vs_ids[pair].add(tuple(new_ids))
+#
+#    return merge_rules
+#
+#
+#vocab_size = 10000
+#merge_rules = train_bpe(tiny_stories_train_txt, vocab_size)
+#print(f"len(merge_rules) = {len(merge_rules)}")
+
+
+
+def proc_pretoken_chunk(args: tuple[str, int, int, str]) -> dict[str, int]:
+    file_path: str
+    start: int
+    end: int
+    end_token: str
+    file_path, start, end, end_token = args
+
+    pretoken_vs_count: dict[str, int] = defaultdict(int)
+
+    with open(file_path, "rb") as f:
+        # read to mem
+        f.seek(start)
+        chunk_bytes: bytes = f.read(end - start)
+        chunk_text: str = chunk_bytes.decode("utf-8", errors = "ignore")
+
+        # pre-tokenize
+        texts: list[str] = chunk_text.split(end_token)
+        for text in texts:
+            for pretoken in pretokenize(text):
+                pretoken_vs_count[pretoken] += 1
+
+    return pretoken_vs_count
+
+def train_bpe(
+        file_path: str,
+        target_vocab_size: int,
+        end_token = "<|endoftext|>",
+        num_processes: int = 8,
+        num_chunks: int = 64,
+) -> dict[tuple[int, int], int]:
+    chunk_boundaries: list[int] = find_chunk_boundaries(
+            file_path,
+            num_chunks = num_chunks,
+            end_token = end_token,
+    )
+    total_chunks: int = len(chunk_boundaries) - 1
+
+    # paralell task
+    chunk_info_list = []
+    for chunk_idx in range(total_chunks):
+        start: int = chunk_boundaries[chunk_idx]
+        end: int = chunk_boundaries[chunk_idx + 1]
+        chunk_info_list.append((file_path, start, end, end_token))
+
+    # run parallel
+    with Pool(processes = num_processes) as pool:
+        all_results: list[dict[str, int]] = list(tqdm(
+                pool.imap(proc_pretoken_chunk, chunk_info_list),
+                total = len(chunk_info_list),
+                desc = "Pretokenizing",
+        ))
+
+    # merge result
+    pretoken_vs_count: dict[str, int] = defaultdict(int)
+    for chunk_result in all_results:
+        for pretoken, count in chunk_result.items():
+            pretoken_vs_count[pretoken] += count
+
+
+    # pretoken -> id
+    ids_vs_count: dict[tuple[int, ...], int] = {
+            tuple(pretoken.encode("utf-8")): count for pretoken, count in pretoken_vs_count.items()
+    }
+
+    # 256 : default vocal size (1 byte)
+    # 1 : end token
+    num_merges: int = target_vocab_size - 256 - 1
+    merge_rules: dict[tuple[int, int], int] = {}
+
+    pair_vs_count: dict[tuple[int,int], int] = defaultdict(int)
+    pair_vs_ids: dict[tuple[int, int], set[tuple[int, ...]]] = defaultdict(set)  # cache
+    for ids, count in ids_vs_count.items():
+        count_pairs(list(ids), count, pair_vs_count)
+        for pair in zip(ids, ids[1:]):  # [0, 1, 2, 3] and [1, 2, 3] -> (0, 1), (1, 2), (2, 3)
+            pair_vs_ids[pair].add(ids)  # register to cache
+
+    for step in tqdm(range(num_merges), desc = "Training BPE"):
+        if not pair_vs_count:
+            # NOP, there is no pair.
+            break
+
+        most_available_pair: tuple[int, int] = max(
+                pair_vs_count,
+                #key = lambda pair: pair_vs_count[pair],
+                key = lambda pair: (pair_vs_count[pair], pair[0], pair[1]),
+        )
+
+        new_id: int = 256 + step
+        merge_rules[most_available_pair] = new_id
+
+        # get cache and delete
+        affected_ids: set[tuple[int, ...]] = pair_vs_ids[most_available_pair]
+        del pair_vs_ids[most_available_pair]
+
+        for ids in affected_ids:
+            ids_count: int = ids_vs_count[ids]
+            new_ids: list[int] = merge(list(ids), most_available_pair, new_id)
+
+            # update related ids
+            del ids_vs_count[ids]
+            ids_vs_count[tuple(new_ids)] = ids_count
+
+            # update old
+            old_pair_vs_count: dict[tuple[int, int], int] = count_pairs(list(ids))
+            for pair, count in old_pair_vs_count.items():
+                # pair count in ids(pretoken) x ids(pretoken) count in text
+                #     = pair count in same pretoken in text. != total pair count in text
+                pair_vs_count[pair] -= count * ids_count
+                if pair_vs_count[pair] <= 0:
+                    del pair_vs_count[pair]
+                pair_vs_ids[pair].discard(ids)  # delete from cache set
+
+            # update new
+            new_pair_vs_count: dict[tuple[int, int], int] = count_pairs(new_ids)
+            for pair, count in new_pair_vs_count.items():
+                # pair count in ids(pretoken) x ids(pretoken) count in text
+                #     = pair count in same pretoken in text. != total pair count in text
+                pair_vs_count[pair] += count * ids_count
+                pair_vs_ids[pair].add(tuple(new_ids))
+
+    return merge_rules
+
+
+
+tiny_stories_merge_rules_pkl = f"{SCRIPT_DIR}/dataset/storybot/tiny_stories_merge_rules.pkl"
+
+#if __name__ == "__main__":
+#    vocab_size = 10000
+#    merge_rules = train_bpe(tiny_stories_train_txt, vocab_size, num_processes = 2)
+#
+#    with open(tiny_stories_merge_rules_pkl, "wb") as f:
+#        pickle.dump(merge_rules, f)
+
+
+#tokenizer = BPETokenizer.load_from(tiny_stories_merge_rules_pkl)
+#
+#print("first 10")
+#for token_id in range(256, 266):
+#    byte_seq = tokenizer.id_vs_bytes[token_id]
+#    text = byte_seq.decode("utf-8")
+#    print(f"    token_id = {token_id}, text = {text}")
+#print("last 10")
+#for token_id in range(9990, 10000):
+#    byte_seq = tokenizer.id_vs_bytes[token_id]
+#    text = byte_seq.decode("utf-8")
+#    print(f"    token_id = {token_id}, text = {text}")
+#
+#sample_text = open(tiny_stories_train_txt).read()[:10000]
+#byte_count = len(sample_text.encode("utf-8"))
+#ids = tokenizer.encode(sample_text)
+#ids_count = len(ids)
+#compression_ratio = byte_count / ids_count
+#print(f"byte count : {byte_count}")
+#print(f"ids_count : {ids_count}")
+#print(f"compression_ratio = {compression_ratio}")
+
+
+#tokenizer = BPETokenizer.load_from(tiny_codes_merge_rules_pkl)
+#text = open(tiny_codes_txt).read()
+#ids = tokenizer.encode(text, show_progress = True)
+#print(f"len(ids) = {len(ids)}")
+
+
+
+tiny_stories_train_bin = f"{SCRIPT_DIR}/.tmp/tiny_stories_train.bin"
+tiny_stories_valid_bin = f"{SCRIPT_DIR}/.tmp/tiny_stories_valid.bin"
+
+
+
+if __name__ == "__main__":
+    tokenizer = BPETokenizer.load_from(tiny_stories_merge_rules_pkl)
+
+    tokenizer.encode_file(
+            tiny_stories_train_txt,
+            tiny_stories_train_bin,
+            num_processes = 2,
+            num_chunks = 64,
+            cache_dir = f"{SCRIPT_DIR}/.cache",
+    )
+
+    tokenizer.encode_file(
+            tiny_stories_valid_txt,
+            tiny_stories_valid_bin,
+            num_processes = 2,
+            num_chunks = 64,
+            cache_dir = f"{SCRIPT_DIR}/.cache",
+    )
 
