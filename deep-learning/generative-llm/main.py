@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import os
 from scipy.stats import norm  # type: ignore[import-untyped]
-from typing import Any, Self, Iterator, cast
+from typing import Any, Self, Iterator, cast, override, overload, Callable
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -26,6 +26,7 @@ import json
 from multiprocessing import Pool
 import shutil
 import time
+from torch.optim.optimizer import Optimizer
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 Path(f"{SCRIPT_DIR}/.tmp").mkdir(parents = True, exist_ok = True)
@@ -2232,51 +2233,164 @@ class GPT(nn.Module):
 
 
 
-vocab_size = 10000
-max_context_len = 256
-embed_dim = 384
-n_head = 6
-n_layer = 6
-ff_dim = int(embed_dim * 8 / 3)
-theta = 10000
+#vocab_size = 10000
+#max_context_len = 256
+#embed_dim = 384
+#n_head = 6
+#n_layer = 6
+#ff_dim = int(embed_dim * 8 / 3)
+#theta = 10000
+#
+#model = GPT(vocab_size, max_context_len, embed_dim, n_head, n_layer, ff_dim, theta)
+#
+#batch_size = 8
+#dummy_input = torch.randint(0, vocab_size, (batch_size, max_context_len))
+#
+#logits = model(dummy_input)
+#
+#print(f"input.shape = {dummy_input.shape}")
+#print(f"logits.shape = {logits.shape}")
+#
+#start_ids = torch.tensor([[42]])
+#max_tokens = 200
+#
+## no cache
+#model.clear_cache()
+#model.eval()
+#start_time = time.time()
+#ids = start_ids
+#with torch.no_grad():
+#    for _ in range(max_tokens):
+#        logits = model(ids, use_cache = False)
+#        next_id = torch.argmax(logits[:, -1, :], dim = -1, keepdim = True)
+#        ids = torch.cat([ids, next_id], dim = 1)
+#elapsed = time.time() - start_time
+#print(f"elapsed w/o cache = {elapsed}, ids.shape = {ids.shape}")
+#
+## with cache
+#model.clear_cache()
+#model.eval()
+#start_time = time.time()
+#ids = start_ids
+#next_id = start_ids
+#with torch.no_grad():
+#    for _ in range(max_tokens):
+#        logits = model(next_id, use_cache = True)
+#        next_id = torch.argmax(logits[:, -1, :], dim = -1, keepdim = True)
+#        ids = torch.cat([ids, next_id], dim = 1)
+#elapsed = time.time() - start_time
+#print(f"elapsed w/ cache  = {elapsed}, ids.shape = {ids.shape}")
 
-model = GPT(vocab_size, max_context_len, embed_dim, n_head, n_layer, ff_dim, theta)
 
-batch_size = 8
-dummy_input = torch.randint(0, vocab_size, (batch_size, max_context_len))
 
-logits = model(dummy_input)
+print(f"# 6 : Learning Advanced")
 
-print(f"input.shape = {dummy_input.shape}")
-print(f"logits.shape = {logits.shape}")
+class SGD(Optimizer):
+    def __init__(self, params: Iterable[Tensor], lr: float = 0.01) -> None:
+        defaults: dict[str, Any] = {
+                "lr": lr,
+        }
+        super().__init__(params, defaults)
 
-start_ids = torch.tensor([[42]])
-max_tokens = 200
+    @overload
+    def step(self, closure: None = None) -> None: ...
+    @overload
+    def step(self, closure: Callable[[], float]) -> float: ...
 
-# no cache
-model.clear_cache()
-model.eval()
-start_time = time.time()
-ids = start_ids
-with torch.no_grad():
-    for _ in range(max_tokens):
-        logits = model(ids, use_cache = False)
-        next_id = torch.argmax(logits[:, -1, :], dim = -1, keepdim = True)
-        ids = torch.cat([ids, next_id], dim = 1)
-elapsed = time.time() - start_time
-print(f"elapsed w/o cache = {elapsed}, ids.shape = {ids.shape}")
+    @override
+    def step(self, closure: Callable[[], float]|None = None) -> float|None:
+        for group in self.param_groups:
+            lr: float = group["lr"]
 
-# with cache
-model.clear_cache()
-model.eval()
-start_time = time.time()
-ids = start_ids
-next_id = start_ids
-with torch.no_grad():
-    for _ in range(max_tokens):
-        logits = model(next_id, use_cache = True)
-        next_id = torch.argmax(logits[:, -1, :], dim = -1, keepdim = True)
-        ids = torch.cat([ids, next_id], dim = 1)
-elapsed = time.time() - start_time
-print(f"elapsed w/ cache  = {elapsed}, ids.shape = {ids.shape}")
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+
+                p.data = p.data - lr * p.grad.data
+
+        return None
+
+
+class AdamW(Optimizer):
+    def __init__(
+            self,
+            params: Iterable[Tensor],
+            lr: float = 1e-3,
+            betas: tuple[float, float] = (0.9, 0.999),
+            eps: float = 1e-8,
+            weight_decay: float = 0.01,
+    ) -> None:
+        defaults: dict[str, Any] = {
+                "lr": lr,
+                "betas": betas,
+                "eps": eps,
+                "weight_decay": weight_decay,
+        }
+        super().__init__(params, defaults)
+
+    @overload
+    def step(self, closure: None = None) -> None: ...
+    @overload
+    def step(self, closure: Callable[[], float]) -> float: ...
+
+    @override
+    def step(self, closure: Callable[[], float]|None = None) -> float|None:
+        for group in self.param_groups:
+            beta1: float
+            beta2: float
+            beta1, beta2 = group["betas"]
+
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+
+                grad: Tensor = p.grad.data
+                state: dict[str, Any] = self.state[p]
+
+                if len(state) == 0:
+                    state["t"] = 0
+                    state["m"] = torch.zeros_like(p.data)
+                    state["v"] = torch.zeros_like(p.data)
+
+                state["t"] += 1
+                t: int = state["t"]
+
+                m: Tensor = state["m"]
+                v: Tensor = state["v"]
+
+                m = beta1 * m + (1.0 - beta1) * grad
+                v = beta2 * v + (1.0 - beta2) * grad ** 2
+
+                state["m"] = m
+                state["v"] = v
+
+                m_hat: Tensor = m / (1.0 - beta1 ** t)
+                v_hat: Tensor = v / (1.0 - beta2 ** t)
+
+                lr: float = group["lr"]
+                eps: float = group["eps"]
+                wd: float = group["weight_decay"]
+
+                # update param
+                p.data = p.data - lr * m_hat / (v_hat.sqrt() + eps) - lr * wd * p.data
+
+        return None
+
+
+
+model = torch.nn.Linear(2, 1)
+optimizer = AdamW(model.parameters(), lr = 0.1)
+
+x = torch.tensor([[1.0, 2.0]])
+y = torch.tensor([[3.0]])
+
+for step in range(5):
+    output = model(x)
+    loss = (output - y).pow(2).mean()
+
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+
+    print(f"step = {step}, loss = {loss:.4f}")
 
