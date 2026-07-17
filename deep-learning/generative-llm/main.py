@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import os
 from scipy.stats import norm  # type: ignore[import-untyped]
-from typing import Any, Self, Iterator
+from typing import Any, Self, Iterator, cast
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -25,6 +25,7 @@ from itertools import cycle
 import json
 from multiprocessing import Pool
 import shutil
+import time
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 Path(f"{SCRIPT_DIR}/.tmp").mkdir(parents = True, exist_ok = True)
@@ -1912,14 +1913,19 @@ class RoPE(nn.Module):
         self.register_buffer("cos_cache", cos)
         self.register_buffer("sin_cache", sin)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, offset: int = 0) -> Tensor:
         batch_size, head_count, context_len, key_dim = x.shape
 
         input_dtype: torch.dtype = x.dtype
         x = x.float()
 
-        cos: Tensor = self.cos_cache[:context_len]
-        sin: Tensor = self.sin_cache[:context_len]
+        # offset limit
+        max_context_len: int = self.cos_cache.size(0)
+        if offset + context_len > max_context_len:
+            offset = max_context_len - context_len
+
+        cos: Tensor = self.cos_cache[offset:offset + context_len]
+        sin: Tensor = self.sin_cache[offset:offset + context_len]
 
         # separate to odd/even for pair
         x_even: Tensor = x[..., 0::2]
@@ -1966,8 +1972,12 @@ class MultiHeadAttention(nn.Module):
 
         self.rope: RoPE = rope
 
+        self.k_cache: Tensor|None = None
+        self.v_cache: Tensor|None = None
+        self.cache_offset: int = 0
+
     # x : (B, C, E)
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, use_cache: bool = False) -> Tensor:
         B, C, E = x.shape
         H = self.head_count
         D = self.head_dim
@@ -1980,15 +1990,41 @@ class MultiHeadAttention(nn.Module):
         K = K.view(B, C, H, D).transpose(1, 2)  # (B, H, C, D)
         V = V.view(B, C, H, D).transpose(1, 2)  # (B, H, C, D)
 
-        Q = self.rope(Q)
-        K = self.rope(K)
+        if use_cache:
+            Q = self.rope(Q, self.cache_offset)
+            K = self.rope(K, self.cache_offset)
+        else:
+            Q = self.rope(Q)
+            K = self.rope(K)
+
+        if use_cache:
+            # check prefill (1st time) or decode (after 2nd)
+            is_1st_call: bool
+            if self.k_cache is None or self.v_cache is None:
+                # 1st call, use all as cache, x includes all prompt.
+                is_1st_call = True
+                self.k_cache = K
+                self.v_cache = V
+            else:
+                # after 2nd call, add latest result to cache, x includes latest prompt only.
+                is_1st_call = False
+                self.k_cache = torch.cat([self.k_cache, K], dim = 2)  # cat on C dim
+                self.v_cache = torch.cat([self.v_cache, V], dim = 2)  # cat on C dim
+
+            # move cache offset to next token (C is current token len)
+            self.cache_offset += C
+
+            K = self.k_cache
+            V = self.v_cache
 
         K_t: Tensor = K.transpose(-2, -1)  # (B, H, C, D) -> (B, H, D, C)
         scores: Tensor = torch.matmul(Q, K_t)  # (B, H, C, D) @ (B, H, D, C) = (B, H, C, C)
         scores = scores / (D ** 0.5)
 
-        mask: Tensor = torch.tril(torch.ones(C, C, device = scores.device))  # (C, C) triangle low
-        scores = scores.masked_fill(mask == 0, float("-inf"))  # (B, H, C, C)
+        # do not use causal mask with kv-cache.
+        if not use_cache or is_1st_call:
+            mask: Tensor = torch.tril(torch.ones(C, C, device = scores.device))  # (C, C) triangle low
+            scores = scores.masked_fill(mask == 0, float("-inf"))  # (B, H, C, C)
 
         weights: Tensor = F.softmax(scores, dim = -1)  # (B, H, C, C)
 
@@ -1999,6 +2035,11 @@ class MultiHeadAttention(nn.Module):
         output: Tensor = self.W_o(hidden)  # (B, C, H * D) @ (H * D, E) = (B, C, E)
 
         return output
+
+    def clear_cache(self) -> None:
+        self.k_cache = None
+        self.v_cache = None
+        self.cache_offset = 0
 
 
 
@@ -2077,10 +2118,13 @@ class Block(nn.Module):
 
     # x : (B, C, E)
     # return : (B, C, E)
-    def forward(self, x: Tensor) -> Tensor:
-        x = x + self.attn(self.norm1(x))
+    def forward(self, x: Tensor, use_cache: bool = False) -> Tensor:
+        x = x + self.attn(self.norm1(x), use_cache = use_cache)
         x = x + self.ffn(self.norm2(x))
         return x
+
+    def clear_cache(self) -> None:
+        self.attn.clear_cache()
 
 
 class GPT(nn.Module):
@@ -2137,18 +2181,23 @@ class GPT(nn.Module):
 
     # ids : (B, C) input text
     # return : (B, C, V) output vocab probability for each context token
-    def forward(self, ids: Tensor) -> Tensor:
+    def forward(self, ids: Tensor, use_cache: bool = False) -> Tensor:
         # embed
         x: Tensor = self.embed(ids)  # (B, C) -> (B, C, E) via (V, E)
 
         # transformer
         for block in self.blocks:
-            x = block(x)
+            x = block(x, use_cache = use_cache)
         x = self.norm(x)
 
         # output
         logits: Tensor = self.unembed(x)  # (B, C, E) @ (E, V) = (B, C, V)
         return logits
+
+    def clear_cache(self) -> None:
+        for block in self.blocks:
+            block = cast(Block, block)
+            block.clear_cache()
 
     def save_to(self, file_path: str) -> None:
         checkpoint = {
@@ -2200,4 +2249,34 @@ logits = model(dummy_input)
 
 print(f"input.shape = {dummy_input.shape}")
 print(f"logits.shape = {logits.shape}")
+
+start_ids = torch.tensor([[42]])
+max_tokens = 200
+
+# no cache
+model.clear_cache()
+model.eval()
+start_time = time.time()
+ids = start_ids
+with torch.no_grad():
+    for _ in range(max_tokens):
+        logits = model(ids, use_cache = False)
+        next_id = torch.argmax(logits[:, -1, :], dim = -1, keepdim = True)
+        ids = torch.cat([ids, next_id], dim = 1)
+elapsed = time.time() - start_time
+print(f"elapsed w/o cache = {elapsed}, ids.shape = {ids.shape}")
+
+# with cache
+model.clear_cache()
+model.eval()
+start_time = time.time()
+ids = start_ids
+next_id = start_ids
+with torch.no_grad():
+    for _ in range(max_tokens):
+        logits = model(next_id, use_cache = True)
+        next_id = torch.argmax(logits[:, -1, :], dim = -1, keepdim = True)
+        ids = torch.cat([ids, next_id], dim = 1)
+elapsed = time.time() - start_time
+print(f"elapsed w/ cache  = {elapsed}, ids.shape = {ids.shape}")
 
