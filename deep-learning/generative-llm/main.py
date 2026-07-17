@@ -14,7 +14,7 @@ from torch import Tensor
 import torchvision  # type: ignore[import-untyped]
 from torchvision import datasets, transforms  # type: ignore[import-untyped]
 from PIL import Image
-from tqdm import tqdm  # type: ignore[import-untyped]
+from tqdm.auto import tqdm  # type: ignore[import-untyped]
 from collections import defaultdict
 import re
 import regex  # type: ignore[import-untyped]
@@ -1002,10 +1002,13 @@ class TokenDataset(Dataset):
 
 def get_device() -> torch.device:
     if torch.cuda.is_available():
+        print("## use cuda device")
         return torch.device("cuda")
     elif torch.backends.mps.is_available():
+        print("## use mps device")
         return torch.device("mps")
     else:
+        print("## use cpu device")
         return torch.device("cpu")
 
 
