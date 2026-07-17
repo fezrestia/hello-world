@@ -27,6 +27,7 @@ from multiprocessing import Pool
 import shutil
 import time
 from torch.optim.optimizer import Optimizer
+from torch.amp import autocast
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 Path(f"{SCRIPT_DIR}/.tmp").mkdir(parents = True, exist_ok = True)
@@ -2378,19 +2379,204 @@ class AdamW(Optimizer):
 
 
 
-model = torch.nn.Linear(2, 1)
-optimizer = AdamW(model.parameters(), lr = 0.1)
+#model = torch.nn.Linear(2, 1)
+#optimizer = AdamW(model.parameters(), lr = 0.1)
+#
+#x = torch.tensor([[1.0, 2.0]])
+#y = torch.tensor([[3.0]])
+#
+#for step in range(5):
+#    output = model(x)
+#    loss = (output - y).pow(2).mean()
+#
+#    loss.backward()
+#    optimizer.step()
+#    optimizer.zero_grad()
+#
+#    print(f"step = {step}, loss = {loss:.4f}")
 
-x = torch.tensor([[1.0, 2.0]])
-y = torch.tensor([[3.0]])
 
-for step in range(5):
-    output = model(x)
-    loss = (output - y).pow(2).mean()
 
-    loss.backward()
-    optimizer.step()
+def get_learning_rate(
+        cur_iters: int,
+        warmup_iters: int,
+        max_iters: int,
+        max_learning_rate: float,
+) -> float:
+    # warm up
+    if cur_iters < warmup_iters:
+        return max_learning_rate * (cur_iters / warmup_iters)
+
+    # annealing
+    if cur_iters < max_iters:
+        progress: float = (cur_iters - warmup_iters) / (max_iters - warmup_iters)
+        return max_learning_rate * (1.0 - progress)
+
+    return 0.0
+
+
+
+train_data = np.memmap(tiny_stories_train_bin, dtype = np.uint16, mode = "r")
+
+
+
+def get_batch(
+        data: np.ndarray,
+        context_len: int,
+        batch_size: int,
+        device: torch.device,
+        random: bool = True,
+        offset: int = 0,
+) -> tuple[Tensor, Tensor]:
+    batch_start_idx: Tensor
+    if random:
+        # random int for batch start idx
+        batch_start_idx = torch.randint(len(data) - context_len - 1, (batch_size,))
+    else:
+        # start, end, step, for batch start idx
+        batch_start_idx = torch.arange(offset, offset + batch_size * context_len, context_len)
+        # cut out overflow, array[bool_array] = array[true only]
+        batch_start_idx = batch_start_idx[batch_start_idx + context_len + 1 < len(data)]
+        if len(batch_start_idx) == 0:
+            raise Exception("Unexpected, batch_start_idx.len == 0")
+
+    x: Tensor = torch.stack([
+            torch.from_numpy(data[i:i + context_len].astype(np.int64))
+                    for i in batch_start_idx
+    ])
+
+    y: Tensor = torch.stack([
+            torch.from_numpy(data[i + 1:i + context_len + 1].astype(np.int64))
+                    for i in batch_start_idx
+    ])
+
+    return (x.to(device), y.to(device))
+
+
+
+def evaluate(
+        model: GPT,
+        val_data: np.ndarray,
+        context_len: int,
+        batch_size: int,
+        device: torch.device,
+) -> float:
+    model.eval()
+
+    total_loss: float = 0.0
+    total_tokens: int = 0
+
+    max_start: int = len(val_data) - context_len - 1
+    num_batches: int = (max_start // context_len) // batch_size + 1
+
+    with torch.no_grad():
+        for batch_idx in tqdm(range(num_batches), desc = "Validation"):
+            offset: int = batch_idx * batch_size * context_len
+            (x, y) = get_batch(
+                    val_data,
+                    context_len,
+                    batch_size,
+                    device,
+                    random = False,
+                    offset = offset,
+            )
+
+            with autocast(device_type = device.type, dtype = torch.bfloat16):
+                logits: Tensor = model(x)
+                loss: Tensor = F.cross_entropy(
+                        logits.view(-1, logits.size(-1)),
+                        y.view(-1),
+                        reduction = "sum",  # only sum, calc mean following with token size
+                )
+
+            total_loss += loss.item()
+            total_tokens += y.numel()
+
+    model.train()
+    return total_loss / total_tokens
+
+
+
+# pre-learning
+
+gpt_model_storybot_pretrain_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_storybot_pretrain.pt"
+
+# hyper param
+context_len = 256
+vocab_size = 10000
+batch_size = 32
+learning_rate = 0.001  # max
+warmup_iters = 200
+max_iters = 40000
+embed_dim = 512
+n_head = 16
+n_layer = 4
+ff_dim = 1344
+theta = 10000
+eval_iters = 500
+grad_clip = 1.0
+save_iters = [500, 5000]
+
+# load data
+train_data = np.memmap(tiny_stories_train_bin, dtype = np.uint16, mode = "r")
+val_data = np.memmap(tiny_stories_valid_bin, dtype = np.uint16, mode = "r")
+
+# components
+tokenizer = BPETokenizer.load_from(tiny_stories_merge_rules_pkl)
+model = GPT(
+        vocab_size,
+        context_len,
+        embed_dim,
+        n_head,
+        n_layer,
+        ff_dim,
+        theta,
+).to(device)
+optimizer = AdamW(model.parameters(), lr = learning_rate)
+
+pbar = tqdm(range(max_iters))
+
+val_loss = float("inf")
+val_losses = []
+val_iters = []
+
+for i in pbar:
+    # update learning rate
+    lr = get_learning_rate(i, warmup_iters, max_iters, learning_rate)
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = lr
+
+    (batch_x, batch_y) = get_batch(train_data, context_len, batch_size, device)
+
     optimizer.zero_grad()
 
-    print(f"step = {step}, loss = {loss:.4f}")
+    with autocast(device_type = device.type, dtype = torch.bfloat16):
+        logits = model(batch_x)
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
+
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+    optimizer.step()
+
+    # save to
+    if i in save_iters:
+        save_path = f"{SCRIPT_DIR}/.tmp/storybot_model_iter_{i}.pt"
+        model.save_to(save_path)
+        print(f"Model saved at iteration {i}: {save_path}")
+
+    # evaluate
+    if (i % eval_iters) == 0 or i == max_iters - 1:
+        val_loss = evaluate(model, val_data, context_len, batch_size, device)
+        val_losses.append(val_loss)
+        val_iters.append(i)
+
+    pbar.set_postfix({"loss": f"{loss.item():.4f}", "val_loss": f"{val_loss:.6f}"})
+
+plt.figure(figsize = (10, 6))
+plt.plot(val_iters, val_losses)
+plt.xlabel("iteration")
+plt.ylabel("validation loss")
+plt.grid(True)
+plt.savefig(f"{SCRIPT_DIR}/.tmp/storybot_pretrain_loss_val.png")
+plt.show()
 
