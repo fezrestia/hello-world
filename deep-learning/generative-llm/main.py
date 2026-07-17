@@ -2504,82 +2504,148 @@ def evaluate(
 
 gpt_model_storybot_pretrain_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_storybot_pretrain.pt"
 
-# hyper param
-context_len = 256
-vocab_size = 10000
-batch_size = 32
-learning_rate = 0.001  # max
-warmup_iters = 200
-max_iters = 40000
-embed_dim = 512
-n_head = 16
-n_layer = 4
-ff_dim = 1344
-theta = 10000
-eval_iters = 500
-grad_clip = 1.0
-save_iters = [500, 5000]
+## hyper param
+#context_len = 256
+#vocab_size = 10000
+#batch_size = 32
+#learning_rate = 0.001  # max
+#warmup_iters = 200
+#max_iters = 40000
+#embed_dim = 512
+#n_head = 16
+#n_layer = 4
+#ff_dim = 1344
+#theta = 10000
+#eval_iters = 500
+#grad_clip = 1.0
+#save_iters = [500, 5000]
+#
+## load data
+#train_data = np.memmap(tiny_stories_train_bin, dtype = np.uint16, mode = "r")
+#val_data = np.memmap(tiny_stories_valid_bin, dtype = np.uint16, mode = "r")
+#
+## components
+#tokenizer = BPETokenizer.load_from(tiny_stories_merge_rules_pkl)
+#model = GPT(
+#        vocab_size,
+#        context_len,
+#        embed_dim,
+#        n_head,
+#        n_layer,
+#        ff_dim,
+#        theta,
+#).to(device)
+#optimizer = AdamW(model.parameters(), lr = learning_rate)
+#
+#pbar = tqdm(range(max_iters))
+#
+#val_loss = float("inf")
+#val_losses = []
+#val_iters = []
+#
+#for i in pbar:
+#    # update learning rate
+#    lr = get_learning_rate(i, warmup_iters, max_iters, learning_rate)
+#    for param_group in optimizer.param_groups:
+#        param_group["lr"] = lr
+#
+#    (batch_x, batch_y) = get_batch(train_data, context_len, batch_size, device)
+#
+#    optimizer.zero_grad()
+#
+#    with autocast(device_type = device.type, dtype = torch.bfloat16):
+#        logits = model(batch_x)
+#        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
+#
+#    loss.backward()
+#    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+#    optimizer.step()
+#
+#    # save to
+#    if i in save_iters:
+#        save_path = f"{SCRIPT_DIR}/.tmp/storybot_model_iter_{i}.pt"
+#        model.save_to(save_path)
+#        print(f"Model saved at iteration {i}: {save_path}")
+#
+#    # evaluate
+#    if (i % eval_iters) == 0 or i == max_iters - 1:
+#        val_loss = evaluate(model, val_data, context_len, batch_size, device)
+#        val_losses.append(val_loss)
+#        val_iters.append(i)
+#
+#    pbar.set_postfix({"loss": f"{loss.item():.4f}", "val_loss": f"{val_loss:.6f}"})
+#
+#model.save_to(gpt_model_storybot_pretrain_pt)
+#
+#plt.figure(figsize = (10, 6))
+#plt.plot(val_iters, val_losses)
+#plt.xlabel("iteration")
+#plt.ylabel("validation loss")
+#plt.grid(True)
+#plt.savefig(f"{SCRIPT_DIR}/.tmp/storybot_pretrain_loss_val.png")
+#plt.show()
 
-# load data
-train_data = np.memmap(tiny_stories_train_bin, dtype = np.uint16, mode = "r")
-val_data = np.memmap(tiny_stories_valid_bin, dtype = np.uint16, mode = "r")
 
-# components
+
+# generate story
+
+@torch.no_grad()
+def generate(
+        model: GPT,
+        tokenizer: BPETokenizer,
+        prompt: str,
+        max_new_tokens: int = 10000,
+        temperature: float = 1.0,
+) -> str:
+    model.eval()
+    model.clear_cache()
+
+    device = next(model.parameters()).device
+
+    token_ids: list[int] = tokenizer.encode(prompt)
+    ids: Tensor = torch.tensor([token_ids], dtype = torch.long, device = device)  # (B, C)  B == 1
+
+    generated_ids: Tensor = ids
+    next_id: Tensor = ids
+
+    for _ in range(max_new_tokens):
+        # limit context len
+        if ids.size(1) > model.max_context_len:
+            ids = ids[:, -model.max_context_len:]
+
+        # (B, C, V) -> (B, 1, V) : last context probability
+        logits: Tensor = model(next_id, use_cache = True)[:, -1, :]
+        if temperature == 0.0:
+            next_id = logits.argmax(dim = -1, keepdim = True)  # max probability on V
+        else:
+            probs: Tensor = F.softmax(logits / temperature, dim = -1)  # softmax on V
+            next_id = torch.multinomial(probs, num_samples = 1)  # sampling
+
+        if next_id.item() == tokenizer.end_token_id:
+            break
+
+        ids = torch.cat((ids, next_id), dim = 1)  # (B, C)
+        generated_ids = torch.cat((generated_ids, next_id), dim = 1)  # (B, C)
+
+    # remove end token, use bool index, (B, C) -> (C,)
+    generated_ids = generated_ids[generated_ids != tokenizer.end_token_id]
+
+    generated_text: str = tokenizer.decode(generated_ids.tolist())
+    return generated_text
+
+
+
 tokenizer = BPETokenizer.load_from(tiny_stories_merge_rules_pkl)
-model = GPT(
-        vocab_size,
-        context_len,
-        embed_dim,
-        n_head,
-        n_layer,
-        ff_dim,
-        theta,
-).to(device)
-optimizer = AdamW(model.parameters(), lr = learning_rate)
+model = GPT.load_from(gpt_model_storybot_pretrain_pt)
 
-pbar = tqdm(range(max_iters))
+prompt = "<|endoftext|>"
+max_new_tokens = 300
+temperature = 1.0
+num_samples = 3
 
-val_loss = float("inf")
-val_losses = []
-val_iters = []
-
-for i in pbar:
-    # update learning rate
-    lr = get_learning_rate(i, warmup_iters, max_iters, learning_rate)
-    for param_group in optimizer.param_groups:
-        param_group["lr"] = lr
-
-    (batch_x, batch_y) = get_batch(train_data, context_len, batch_size, device)
-
-    optimizer.zero_grad()
-
-    with autocast(device_type = device.type, dtype = torch.bfloat16):
-        logits = model(batch_x)
-        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
-
-    loss.backward()
-    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-    optimizer.step()
-
-    # save to
-    if i in save_iters:
-        save_path = f"{SCRIPT_DIR}/.tmp/storybot_model_iter_{i}.pt"
-        model.save_to(save_path)
-        print(f"Model saved at iteration {i}: {save_path}")
-
-    # evaluate
-    if (i % eval_iters) == 0 or i == max_iters - 1:
-        val_loss = evaluate(model, val_data, context_len, batch_size, device)
-        val_losses.append(val_loss)
-        val_iters.append(i)
-
-    pbar.set_postfix({"loss": f"{loss.item():.4f}", "val_loss": f"{val_loss:.6f}"})
-
-plt.figure(figsize = (10, 6))
-plt.plot(val_iters, val_losses)
-plt.xlabel("iteration")
-plt.ylabel("validation loss")
-plt.grid(True)
-plt.savefig(f"{SCRIPT_DIR}/.tmp/storybot_pretrain_loss_val.png")
-plt.show()
+for i in range(num_samples):
+    story = generate(model, tokenizer, prompt, max_new_tokens, temperature)
+    print(f"------------ story {i} ------------")
+    print(story)
+    print()
 
