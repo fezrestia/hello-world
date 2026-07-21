@@ -2635,17 +2635,187 @@ def generate(
 
 
 
+#tokenizer = BPETokenizer.load_from(tiny_stories_merge_rules_pkl)
+#model = GPT.load_from(gpt_model_storybot_pretrain_pt)
+#
+#prompt = "<|endoftext|>"
+#max_new_tokens = 300
+#temperature = 1.0
+#num_samples = 3
+#
+#for i in range(num_samples):
+#    story = generate(model, tokenizer, prompt, max_new_tokens, temperature)
+#    print(f"------------ story {i} ------------")
+#    print(story)
+#    print()
+
+
+
+class DPODataset(Dataset):
+    def __init__(self, data_path: str, tokenizer: BPETokenizer, context_len: int) -> None:
+        self.tokenizer: BPETokenizer = tokenizer
+        self.context_len: int = context_len
+        self.samples: list[tuple[list[int], list[int], list[int], list[int]]] = []
+
+        with open(data_path) as f:
+            data = json.load(f)
+
+        for item in data:
+            sample: tuple[list[int], list[int], list[int], list[int]] = self._create_sample(
+                    item["prompt"],
+                    item["chosen"],
+                    item["rejected"],
+            )
+            self.samples.append(sample)
+
+    def _pad_and_mask(self, ids: list[int], prompt_len: int) -> tuple[list[int], list[int]]:
+        mask: list[int] = [0] * prompt_len + [1] * (len(ids) - prompt_len)
+
+        if len(ids) > self.context_len:
+            ids = ids[:self.context_len]
+            mask = mask[:self.context_len]
+        else:
+            pad_len: int = self.context_len - len(ids)
+            ids = ids + [0] * pad_len
+            mask = mask + [0] * pad_len
+
+        return (ids, mask)
+
+    def _create_sample(
+            self,
+            prompt: str,
+            chosen: str,
+            rejected: str,
+    ) -> tuple[list[int], list[int], list[int], list[int]]:
+        prompt_ids: list[int] = self.tokenizer.encode(prompt)
+        chosen_ids: list[int] = prompt_ids + self.tokenizer.encode(chosen)
+        rejected_ids: list[int] = prompt_ids + self.tokenizer.encode(rejected)
+
+        prompt_len: int = len(prompt_ids)
+        chosen_mask: list[int]
+        rejected_mask: list[int]
+        chosen_ids, chosen_mask = self._pad_and_mask(chosen_ids, prompt_len)
+        rejected_ids, rejected_mask = self._pad_and_mask(rejected_ids, prompt_len)
+
+        return (chosen_ids, chosen_mask, rejected_ids, rejected_mask)
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        chosen_ids, chosen_mask, rejected_ids, rejected_mask = self.samples[idx]
+
+        return (
+                torch.tensor(chosen_ids, dtype = torch.long),
+                torch.tensor(chosen_mask, dtype = torch.long),
+                torch.tensor(rejected_ids, dtype = torch.long),
+                torch.tensor(rejected_mask, dtype = torch.long),
+        )
+
+
+# ids/mask includes prompt + chosen/rejected
+def get_sequence_logprobs(model: GPT, ids: Tensor, mask: Tensor) -> Tensor:
+    logits: Tensor = model(ids)  # (B, C) -> (B, C, V)
+    log_probs: Tensor = F.log_softmax(logits[:, :-1, :], dim = -1)  # (B, C - 1, V)
+    labels: Tensor = ids[:, 1:]  # (B, C - 1)
+
+    # get each label probability from V
+    per_token_logprobs: Tensor = torch.gather(
+            log_probs,  # (B, C - 1, V)
+            dim = -1,
+            index = labels.unsqueeze(-1),  # (B, C - 1, 1)
+    ).squeeze(-1)  # (B, C - 1, 1) -> (B, C - 1)
+
+    masked_logprobs: Tensor = per_token_logprobs * mask[:, 1:]  # (B, C - 1)  based on label index
+
+    return masked_logprobs.sum(dim = -1)  # (B,)
+
+
+def compute_dpo_loss(
+        model: GPT,
+        ref_model: GPT,
+        chosen_ids: Tensor,
+        chosen_mask: Tensor,
+        rejected_ids: Tensor,
+        rejected_mask: Tensor,
+        beta: float,
+) -> Tensor:
+    # (B,)
+    chosen_logprobs: Tensor = get_sequence_logprobs(model, chosen_ids, chosen_mask)
+    rejected_logprobs: Tensor = get_sequence_logprobs(model, rejected_ids, rejected_mask)
+
+    with torch.no_grad():
+        # (B,)
+        ref_chosen_logprobs: Tensor = get_sequence_logprobs(ref_model, chosen_ids, chosen_mask)
+        ref_rejected_logprobs: Tensor = get_sequence_logprobs(ref_model, rejected_ids, rejected_mask)
+
+    # DPO loss : (B,)
+    logits = beta * (
+            (chosen_logprobs - rejected_logprobs)
+            - (ref_chosen_logprobs - ref_rejected_logprobs)
+    )
+
+    return -F.logsigmoid(logits).mean()  # scalar
+
+
+
+# learning loop
+
+tiny_stories_dpo_json = f"{SCRIPT_DIR}/dataset/storybot/tiny_stories_dpo.json"
+
+gpt_model_storybot_dpo_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_storybot_dpo.pt"
+
+context_len = 256
+batch_size = 8
+learning_rate = 5e-6
+beta = 0.1
+max_iters = 1000
+
 tokenizer = BPETokenizer.load_from(tiny_stories_merge_rules_pkl)
-model = GPT.load_from(gpt_model_storybot_pretrain_pt)
+dataset = DPODataset(tiny_stories_dpo_json, tokenizer, context_len)
+dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = True)
 
-prompt = "<|endoftext|>"
-max_new_tokens = 300
-temperature = 1.0
-num_samples = 3
+model = GPT.load_from(gpt_model_storybot_pretrain_pt, device = device)
+ref_model = GPT.load_from(gpt_model_storybot_pretrain_pt, device = device)
+ref_model.eval()
 
-for i in range(num_samples):
-    story = generate(model, tokenizer, prompt, max_new_tokens, temperature)
-    print(f"------------ story {i} ------------")
-    print(story)
-    print()
+optimizer = AdamW(model.parameters(), lr = learning_rate)
+
+losses = []
+data_iter = cycle(dataloader)
+pbar = tqdm(range(max_iters))
+
+for i in pbar:
+    chosen_ids, chosen_mask, rejected_ids, rejected_mask = next(data_iter)
+
+    chosen_ids = chosen_ids.to(device)
+    chosen_mask = chosen_mask.to(device)
+    rejected_ids = rejected_ids.to(device)
+    rejected_mask = rejected_mask.to(device)
+
+    loss = compute_dpo_loss(
+            model,
+            ref_model,
+            chosen_ids,
+            chosen_mask,
+            rejected_ids,
+            rejected_mask,
+            beta,
+    )
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    losses.append(loss.item())
+    pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+
+plt.figure(figsize = (10, 6))
+plt.plot(losses)
+plt.xlabel("iteration")
+plt.ylabel("loss")
+plt.grid(True)
+plt.show()
+
+model.save_to(gpt_model_storybot_dpo_pt)
 
