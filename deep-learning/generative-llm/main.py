@@ -2765,57 +2765,73 @@ tiny_stories_dpo_json = f"{SCRIPT_DIR}/dataset/storybot/tiny_stories_dpo.json"
 
 gpt_model_storybot_dpo_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_storybot_dpo.pt"
 
-context_len = 256
-batch_size = 8
-learning_rate = 5e-6
-beta = 0.1
-max_iters = 1000
+#context_len = 256
+#batch_size = 8
+#learning_rate = 5e-6
+#beta = 0.1
+#max_iters = 1000
+#
+#tokenizer = BPETokenizer.load_from(tiny_stories_merge_rules_pkl)
+#dataset = DPODataset(tiny_stories_dpo_json, tokenizer, context_len)
+#dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = True)
+#
+#model = GPT.load_from(gpt_model_storybot_pretrain_pt, device = device)
+#ref_model = GPT.load_from(gpt_model_storybot_pretrain_pt, device = device)
+#ref_model.eval()
+#
+#optimizer = AdamW(model.parameters(), lr = learning_rate)
+#
+#losses = []
+#data_iter = cycle(dataloader)
+#pbar = tqdm(range(max_iters))
+#
+#for i in pbar:
+#    chosen_ids, chosen_mask, rejected_ids, rejected_mask = next(data_iter)
+#
+#    chosen_ids = chosen_ids.to(device)
+#    chosen_mask = chosen_mask.to(device)
+#    rejected_ids = rejected_ids.to(device)
+#    rejected_mask = rejected_mask.to(device)
+#
+#    loss = compute_dpo_loss(
+#            model,
+#            ref_model,
+#            chosen_ids,
+#            chosen_mask,
+#            rejected_ids,
+#            rejected_mask,
+#            beta,
+#    )
+#
+#    optimizer.zero_grad()
+#    loss.backward()
+#    optimizer.step()
+#
+#    losses.append(loss.item())
+#    pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+#
+#plt.figure(figsize = (10, 6))
+#plt.plot(losses)
+#plt.xlabel("iteration")
+#plt.ylabel("loss")
+#plt.grid(True)
+#plt.show()
+#
+#model.save_to(gpt_model_storybot_dpo_pt)
 
-tokenizer = BPETokenizer.load_from(tiny_stories_merge_rules_pkl)
-dataset = DPODataset(tiny_stories_dpo_json, tokenizer, context_len)
-dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = True)
 
-model = GPT.load_from(gpt_model_storybot_pretrain_pt, device = device)
-ref_model = GPT.load_from(gpt_model_storybot_pretrain_pt, device = device)
-ref_model.eval()
 
-optimizer = AdamW(model.parameters(), lr = learning_rate)
+print(f"# 7 : Tokenizer Challenge")
 
-losses = []
-data_iter = cycle(dataloader)
-pbar = tqdm(range(max_iters))
+owt_train_txt = f"{SCRIPT_DIR}/.tmp/owt_train.txt"
+owt_valid_txt = f"{SCRIPT_DIR}/.tmp/owt_valid.txt"
 
-for i in pbar:
-    chosen_ids, chosen_mask, rejected_ids, rejected_mask = next(data_iter)
+webbot_merge_rules_pkl = f"{SCRIPT_DIR}/dataset/webbot/webbot_merge_rules.pkl"
 
-    chosen_ids = chosen_ids.to(device)
-    chosen_mask = chosen_mask.to(device)
-    rejected_ids = rejected_ids.to(device)
-    rejected_mask = rejected_mask.to(device)
+if __name__ == "__main__":
+    vocab_size = 50000
+    merge_rules = train_bpe(owt_train_txt, vocab_size, num_processes = 2, num_chunks = 64)
 
-    loss = compute_dpo_loss(
-            model,
-            ref_model,
-            chosen_ids,
-            chosen_mask,
-            rejected_ids,
-            rejected_mask,
-            beta,
-    )
-
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-
-    losses.append(loss.item())
-    pbar.set_postfix({"loss": f"{loss.item():.4f}"})
-
-plt.figure(figsize = (10, 6))
-plt.plot(losses)
-plt.xlabel("iteration")
-plt.ylabel("loss")
-plt.grid(True)
-plt.show()
-
-model.save_to(gpt_model_storybot_dpo_pt)
+    with open(webbot_merge_rules_pkl, "wb") as f:
+        pickle.dump(merge_rules, f)
 
