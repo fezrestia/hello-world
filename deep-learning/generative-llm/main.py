@@ -30,6 +30,9 @@ from torch.optim.optimizer import Optimizer
 from torch.amp import autocast
 import wandb
 
+import tokenizer_pyo3
+rstk = cast(Any, tokenizer_pyo3)
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 Path(f"{SCRIPT_DIR}/.tmp").mkdir(parents = True, exist_ok = True)
 
@@ -1708,6 +1711,15 @@ def proc_pretoken_chunk(args: tuple[str, int, int, str]) -> dict[str, int]:
     end_token: str
     file_path, start, end, end_token = args
 
+
+    #pretoken_vs_count: dict[str, int] = rstk.proc_pretoken_chunk(
+    #        file_path,
+    #        start,
+    #        end,
+    #        end_token,
+    #)
+
+
     pretoken_vs_count: dict[str, int] = defaultdict(int)
 
     with open(file_path, "rb") as f:
@@ -1723,6 +1735,62 @@ def proc_pretoken_chunk(args: tuple[str, int, int, str]) -> dict[str, int]:
                 pretoken_vs_count[pretoken] += 1
 
     return pretoken_vs_count
+
+#def train_bpe_loop(
+#        num_merges: int,
+#        pair_vs_count: dict[tuple[int,int], int],
+#        pair_vs_ids: dict[tuple[int, int], set[tuple[int, ...]]],
+#        ids_vs_count: dict[tuple[int, ...], int],
+#) -> dict[tuple[int, int], int]:
+#    merge_rules: dict[tuple[int, int], int] = {}
+#
+#    for step in tqdm(range(num_merges), desc = "Training BPE"):
+#        if not pair_vs_count:
+#            # NOP, there is no pair.
+#            break
+#
+#        most_available_pair: tuple[int, int] = max(
+#                pair_vs_count,
+#                #key = lambda pair: pair_vs_count[pair],
+#                key = lambda pair: (pair_vs_count[pair], pair[0], pair[1]),
+#        )
+#
+#        new_id: int = 256 + step
+#        merge_rules[most_available_pair] = new_id
+#
+#        # get cache and delete
+#        affected_ids: set[tuple[int, ...]] = pair_vs_ids[most_available_pair]
+#        del pair_vs_ids[most_available_pair]
+#
+#        for ids in affected_ids:
+#            ids_count: int = ids_vs_count[ids]
+#            new_ids: list[int] = merge(list(ids), most_available_pair, new_id)
+#
+#            # update related ids
+#            del ids_vs_count[ids]
+#            ids_vs_count[tuple(new_ids)] = ids_count
+#
+#            # update old
+#            old_pair_vs_count: dict[tuple[int, int], int]
+#            old_pair_vs_count = rstk.count_pairs(list(ids), 1, None)
+#            for pair, count in old_pair_vs_count.items():
+#                # pair count in ids(pretoken) x ids(pretoken) count in text
+#                #     = pair count in same pretoken in text. != total pair count in text
+#                pair_vs_count[pair] -= count * ids_count
+#                if pair_vs_count[pair] <= 0:
+#                    del pair_vs_count[pair]
+#                pair_vs_ids[pair].discard(ids)  # delete from cache set
+#
+#            # update new
+#            new_pair_vs_count: dict[tuple[int, int], int]
+#            new_pair_vs_count = rstk.count_pairs(new_ids, 1, None)
+#            for pair, count in new_pair_vs_count.items():
+#                # pair count in ids(pretoken) x ids(pretoken) count in text
+#                #     = pair count in same pretoken in text. != total pair count in text
+#                pair_vs_count[pair] += count * ids_count
+#                pair_vs_ids[pair].add(tuple(new_ids))
+#
+#    return merge_rules
 
 def train_bpe(
         file_path: str,
@@ -1777,49 +1845,66 @@ def train_bpe(
         for pair in zip(ids, ids[1:]):  # [0, 1, 2, 3] and [1, 2, 3] -> (0, 1), (1, 2), (2, 3)
             pair_vs_ids[pair].add(ids)  # register to cache
 
-    for step in tqdm(range(num_merges), desc = "Training BPE"):
-        if not pair_vs_count:
-            # NOP, there is no pair.
-            break
 
-        most_available_pair: tuple[int, int] = max(
-                pair_vs_count,
-                #key = lambda pair: pair_vs_count[pair],
-                key = lambda pair: (pair_vs_count[pair], pair[0], pair[1]),
-        )
+    merge_rules = rstk.train_bpe_loop(
+            num_merges,
+            pair_vs_count,
+            pair_vs_ids,
+            ids_vs_count,
+            merge_rules,
+    )
 
-        new_id: int = 256 + step
-        merge_rules[most_available_pair] = new_id
+    #for step in tqdm(range(num_merges), desc = "Training BPE"):
+    #    if not pair_vs_count:
+    #        # NOP, there is no pair.
+    #        break
 
-        # get cache and delete
-        affected_ids: set[tuple[int, ...]] = pair_vs_ids[most_available_pair]
-        del pair_vs_ids[most_available_pair]
+    #    merge_rules = rstk.train_bpe_loop(
+    #            step,
+    #            pair_vs_count,
+    #            pair_vs_ids,
+    #            ids_vs_count,
+    #            merge_rules,
+    #    )
 
-        for ids in affected_ids:
-            ids_count: int = ids_vs_count[ids]
-            new_ids: list[int] = merge(list(ids), most_available_pair, new_id)
+    #    #most_available_pair: tuple[int, int] = max(
+    #    #        pair_vs_count,
+    #    #        #key = lambda pair: pair_vs_count[pair],
+    #    #        key = lambda pair: (pair_vs_count[pair], pair[0], pair[1]),
+    #    #)
 
-            # update related ids
-            del ids_vs_count[ids]
-            ids_vs_count[tuple(new_ids)] = ids_count
+    #    #new_id: int = 256 + step
+    #    #merge_rules[most_available_pair] = new_id
 
-            # update old
-            old_pair_vs_count: dict[tuple[int, int], int] = count_pairs(list(ids))
-            for pair, count in old_pair_vs_count.items():
-                # pair count in ids(pretoken) x ids(pretoken) count in text
-                #     = pair count in same pretoken in text. != total pair count in text
-                pair_vs_count[pair] -= count * ids_count
-                if pair_vs_count[pair] <= 0:
-                    del pair_vs_count[pair]
-                pair_vs_ids[pair].discard(ids)  # delete from cache set
+    #    ## get cache and delete
+    #    #affected_ids: set[tuple[int, ...]] = pair_vs_ids[most_available_pair]
+    #    #del pair_vs_ids[most_available_pair]
 
-            # update new
-            new_pair_vs_count: dict[tuple[int, int], int] = count_pairs(new_ids)
-            for pair, count in new_pair_vs_count.items():
-                # pair count in ids(pretoken) x ids(pretoken) count in text
-                #     = pair count in same pretoken in text. != total pair count in text
-                pair_vs_count[pair] += count * ids_count
-                pair_vs_ids[pair].add(tuple(new_ids))
+    #    #for ids in affected_ids:
+    #    #    ids_count: int = ids_vs_count[ids]
+    #    #    new_ids: list[int] = merge(list(ids), most_available_pair, new_id)
+
+    #    #    # update related ids
+    #    #    del ids_vs_count[ids]
+    #    #    ids_vs_count[tuple(new_ids)] = ids_count
+
+    #    #    # update old
+    #    #    old_pair_vs_count: dict[tuple[int, int], int] = count_pairs(list(ids))
+    #    #    for pair, count in old_pair_vs_count.items():
+    #    #        # pair count in ids(pretoken) x ids(pretoken) count in text
+    #    #        #     = pair count in same pretoken in text. != total pair count in text
+    #    #        pair_vs_count[pair] -= count * ids_count
+    #    #        if pair_vs_count[pair] <= 0:
+    #    #            del pair_vs_count[pair]
+    #    #        pair_vs_ids[pair].discard(ids)  # delete from cache set
+
+    #    #    # update new
+    #    #    new_pair_vs_count: dict[tuple[int, int], int] = count_pairs(new_ids)
+    #    #    for pair, count in new_pair_vs_count.items():
+    #    #        # pair count in ids(pretoken) x ids(pretoken) count in text
+    #    #        #     = pair count in same pretoken in text. != total pair count in text
+    #    #        pair_vs_count[pair] += count * ids_count
+    #    #        pair_vs_ids[pair].add(tuple(new_ids))
 
     return merge_rules
 
@@ -2831,30 +2916,33 @@ webbot_merge_rules_pkl = f"{SCRIPT_DIR}/dataset/webbot/webbot_merge_rules.pkl"
 
 if __name__ == "__main__":
     vocab_size = 50000
-    merge_rules = train_bpe(owt_train_txt, vocab_size, num_processes = 12, num_chunks = 64)
+    #merge_rules = train_bpe(tiny_codes_txt, vocab_size, num_processes = 2, num_chunks = 16)
+    #merge_rules = train_bpe(tiny_stories_train_txt, vocab_size, num_processes = 2, num_chunks = 64)
+    merge_rules = train_bpe(owt_train_txt, vocab_size, num_processes = 2, num_chunks = 64)
+    print(f"merge_rules len = {len(merge_rules)}")
 
     with open(webbot_merge_rules_pkl, "wb") as f:
         pickle.dump(merge_rules, f)
 
 
 
-owt_train_bin = f"{SCRIPT_DIR}/.tmp/owt_train.bin"
-owt_valid_bin = f"{SCRIPT_DIR}/.tmp/owt_valid.bin"
-
-if __name__ == '__main__':
-    tokenizer = BPETokenizer.load_from(webbot_merge_rules_pkl)
-
-    tokenizer.encode_file(
-            owt_train_txt,
-            owt_train_bin,
-            num_processes = 12,
-    )
-
-    tokenizer.encode_file(
-            owt_valid_txt,
-            owt_valid_bin,
-            num_processes = 12,
-    )
+#owt_train_bin = f"{SCRIPT_DIR}/.tmp/owt_train.bin"
+#owt_valid_bin = f"{SCRIPT_DIR}/.tmp/owt_valid.bin"
+#
+#if __name__ == '__main__':
+#    tokenizer = BPETokenizer.load_from(webbot_merge_rules_pkl)
+#
+#    tokenizer.encode_file(
+#            owt_train_txt,
+#            owt_train_bin,
+#            num_processes = 12,
+#    )
+#
+#    tokenizer.encode_file(
+#            owt_valid_txt,
+#            owt_valid_bin,
+#            num_processes = 12,
+#    )
 
 
 
@@ -2864,121 +2952,121 @@ print(f"# 8 : Model Challenge")
 
 print(f"# 9 : Learning Challenge")
 
-# hyper param
-
-gpt_model_webbot_pretrain_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_webbot_pretrain.pt"
-
-context_len = 1024
-vocab_size = 50000
-micro_batch_size = 32
-accumulation_steps = 4
-learning_rate = 6e-4  # max
-warmup_iters = 500
-max_iters = 100000
-embed_dim = 768
-n_head = 16
-n_layer = 12
-ff_dim = 2048
-theta = 10000
-eval_iters = 1000
-grad_clip = 1.0
-
-if __name__ == '__main__':
-    wandb.config.update({
-            "context_len": context_len,
-            "vocab_size": vocab_size,
-            "micro_batch_size": micro_batch_size,
-            "accumulation_steps": accumulation_steps,
-            "learning_rate": learning_rate,
-            "warmup_iters": warmup_iters,
-            "max_iters": max_iters,
-            "embed_dim": embed_dim,
-            "n_head": n_head,
-            "n_layer": n_layer,
-            "ff_dim": ff_dim,
-            "theta": theta,
-            "eval_iters": eval_iters,
-            "grad_clip": grad_clip,
-    })
-
-# load data
-train_data = np.memmap(owt_train_bin, dtype = np.uint16, mode = "r")
-valid_data = np.memmap(owt_valid_bin, dtype = np.uint16, mode = "r")
-print(f"owt_train.bin : {len(train_data)} tokens")
-print(f"owt_valid.bin : {len(valid_data)} tokens")
-
-# components
-model: Any = GPT(
-        vocab_size,
-        context_len,
-        embed_dim,
-        n_head,
-        n_layer,
-        ff_dim,
-        theta,
-).to(device)
-
-num_params = sum(p.numel() for p in model.parameters())
-print(f"parameter count : {num_params} ({num_params/1e6:.2f}M")
-
-model = torch.compile(model)
-
-optimizer = AdamW(model.parameters(), lr = learning_rate)
-
-pbar = tqdm(range(max_iters))
-
-val_losses = []
-val_iters = []
-
-for i in pbar:
-    # update learning rate
-    lr = get_learning_rate(i, warmup_iters, max_iters, learning_rate)
-    for param_group in optimizer.param_groups:
-        param_group["lr"] = lr
-
-    optimizer.zero_grad()
-
-    # gradient accumulation
-    for micro_step in range(accumulation_steps):
-        (batch_x, batch_y) = get_batch(train_data, context_len, micro_batch_size, device)
-
-        with autocast(device_type = device.type, dtype = torch.bfloat16):
-            logits = model(batch_x)
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
-            loss = loss / accumulation_steps
-
-        loss.backward()  # accumulate
-
-    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-    optimizer.step()
-
-
-    # log per step
-    train_loss = loss.item() * accumulation_steps
-    wandb.log({"train/loss": train_loss, "train/lr": lr}, step = i)
-
-
-    # evaluate
-    val_loss: Any = "N/A"
-    if (i % eval_iters) == 0 or i == max_iters - 1:
-        val_loss = evaluate(model, valid_data, context_len, micro_batch_size, device)
-        val_losses.append(val_loss)
-        val_iters.append(i)
-
-        wandb.log({"val/loss": val_loss}, step = i)
-
-    print(f"step = {i}, train_loss = {train_loss:.6f}, val_loss = {val_loss:.6f}")
-    pbar.set_postfix({"train_loss": f"{train_loss:.6f}", "val_loss": f"{val_loss:.6f}"})
-
-model.save_to(gpt_model_webbot_pretrain_pt)
-
-plt.figure(figsize = (10, 6))
-plt.plot(val_iters, val_losses)
-plt.xlabel("iteration")
-plt.ylabel("validation loss")
-plt.grid(True)
-plt.savefig(f"{SCRIPT_DIR}/.tmp/storybot_pretrain_loss_val.png")
-plt.show()
-
-wandb.finish()
+## hyper param
+#
+#gpt_model_webbot_pretrain_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_webbot_pretrain.pt"
+#
+#context_len = 1024
+#vocab_size = 50000
+#micro_batch_size = 32
+#accumulation_steps = 4
+#learning_rate = 6e-4  # max
+#warmup_iters = 500
+#max_iters = 100000
+#embed_dim = 768
+#n_head = 16
+#n_layer = 12
+#ff_dim = 2048
+#theta = 10000
+#eval_iters = 1000
+#grad_clip = 1.0
+#
+#if __name__ == '__main__':
+#    wandb.config.update({
+#            "context_len": context_len,
+#            "vocab_size": vocab_size,
+#            "micro_batch_size": micro_batch_size,
+#            "accumulation_steps": accumulation_steps,
+#            "learning_rate": learning_rate,
+#            "warmup_iters": warmup_iters,
+#            "max_iters": max_iters,
+#            "embed_dim": embed_dim,
+#            "n_head": n_head,
+#            "n_layer": n_layer,
+#            "ff_dim": ff_dim,
+#            "theta": theta,
+#            "eval_iters": eval_iters,
+#            "grad_clip": grad_clip,
+#    })
+#
+## load data
+#train_data = np.memmap(owt_train_bin, dtype = np.uint16, mode = "r")
+#valid_data = np.memmap(owt_valid_bin, dtype = np.uint16, mode = "r")
+#print(f"owt_train.bin : {len(train_data)} tokens")
+#print(f"owt_valid.bin : {len(valid_data)} tokens")
+#
+## components
+#model: Any = GPT(
+#        vocab_size,
+#        context_len,
+#        embed_dim,
+#        n_head,
+#        n_layer,
+#        ff_dim,
+#        theta,
+#).to(device)
+#
+#num_params = sum(p.numel() for p in model.parameters())
+#print(f"parameter count : {num_params} ({num_params/1e6:.2f}M")
+#
+#model = torch.compile(model)
+#
+#optimizer = AdamW(model.parameters(), lr = learning_rate)
+#
+#pbar = tqdm(range(max_iters))
+#
+#val_losses = []
+#val_iters = []
+#
+#for i in pbar:
+#    # update learning rate
+#    lr = get_learning_rate(i, warmup_iters, max_iters, learning_rate)
+#    for param_group in optimizer.param_groups:
+#        param_group["lr"] = lr
+#
+#    optimizer.zero_grad()
+#
+#    # gradient accumulation
+#    for micro_step in range(accumulation_steps):
+#        (batch_x, batch_y) = get_batch(train_data, context_len, micro_batch_size, device)
+#
+#        with autocast(device_type = device.type, dtype = torch.bfloat16):
+#            logits = model(batch_x)
+#            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
+#            loss = loss / accumulation_steps
+#
+#        loss.backward()  # accumulate
+#
+#    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+#    optimizer.step()
+#
+#
+#    # log per step
+#    train_loss = loss.item() * accumulation_steps
+#    wandb.log({"train/loss": train_loss, "train/lr": lr}, step = i)
+#
+#
+#    # evaluate
+#    val_loss: Any = "N/A"
+#    if (i % eval_iters) == 0 or i == max_iters - 1:
+#        val_loss = evaluate(model, valid_data, context_len, micro_batch_size, device)
+#        val_losses.append(val_loss)
+#        val_iters.append(i)
+#
+#        wandb.log({"val/loss": val_loss}, step = i)
+#
+#    print(f"step = {i}, train_loss = {train_loss:.6f}, val_loss = {val_loss:.6f}")
+#    pbar.set_postfix({"train_loss": f"{train_loss:.6f}", "val_loss": f"{val_loss:.6f}"})
+#
+#model.save_to(gpt_model_webbot_pretrain_pt)
+#
+#plt.figure(figsize = (10, 6))
+#plt.plot(val_iters, val_losses)
+#plt.xlabel("iteration")
+#plt.ylabel("validation loss")
+#plt.grid(True)
+#plt.savefig(f"{SCRIPT_DIR}/.tmp/storybot_pretrain_loss_val.png")
+#plt.show()
+#
+#wandb.finish()
 
