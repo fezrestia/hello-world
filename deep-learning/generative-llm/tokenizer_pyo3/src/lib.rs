@@ -95,6 +95,8 @@ fn train_bpe_loop(
         mut ids_vs_count: HashMap<Vec<i32>, i32>,
         mut merge_rules: HashMap<(i32, i32), i32>,
 ) -> HashMap<(i32, i32), i32> {
+    println!("pyo3.train_bpe_loop() : E");
+
     let log_steps: i32 = (num_merges / 100).max(1);
 
     for step in 0..num_merges {
@@ -161,6 +163,7 @@ fn train_bpe_loop(
         }
     }
 
+    println!("pyo3.train_bpe_loop() : X");
     return merge_rules
 }
 
