@@ -20,7 +20,7 @@ import shutil
 from torch.optim.optimizer import Optimizer
 from torch.amp import autocast
 import wandb
-
+import time
 import tokenizer_pyo3
 rstk = cast(Any, tokenizer_pyo3)
 
@@ -349,6 +349,10 @@ def train_bpe(
         num_processes: int = 8,
         num_chunks: int = 64,
 ) -> dict[tuple[int, int], int]:
+    print("python.train_bpe() : E")
+    start_ts = time.perf_counter()
+    elapsed_ms = 0.0
+
     chunk_boundaries: list[int] = find_chunk_boundaries(
             file_path,
             num_chunks = num_chunks,
@@ -356,12 +360,18 @@ def train_bpe(
     )
     total_chunks: int = len(chunk_boundaries) - 1
 
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    print(f"python.train_bpe() : find_chunk_boundaries() done [{elapsed_ms} ms]")
+
     # paralell task
     chunk_info_list = []
     for chunk_idx in range(total_chunks):
         start: int = chunk_boundaries[chunk_idx]
         end: int = chunk_boundaries[chunk_idx + 1]
         chunk_info_list.append((file_path, start, end, end_token))
+
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    print(f"python.train_bpe() : parallel task def done [{elapsed_ms} ms]")
 
     # run parallel
     with Pool(processes = num_processes) as pool:
@@ -371,22 +381,30 @@ def train_bpe(
                 desc = "Pretokenizing",
         ))
 
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    print(f"python.train_bpe() : run parallel done [{elapsed_ms} ms]")
+
     # merge result
     pretoken_vs_count: dict[str, int] = defaultdict(int)
     for chunk_result in all_results:
         for pretoken, count in chunk_result.items():
             pretoken_vs_count[pretoken] += count
 
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    print(f"python.train_bpe() : merge result done [{elapsed_ms} ms]")
 
     # pretoken -> id
     ids_vs_count: dict[tuple[int, ...], int] = {
             tuple(pretoken.encode("utf-8")): count for pretoken, count in pretoken_vs_count.items()
     }
 
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    print(f"python.train_bpe() : pretoken -> id done [{elapsed_ms} ms]")
+
     # 256 : default vocal size (1 byte)
     # 1 : end token
     num_merges: int = target_vocab_size - 256 - 1
-    merge_rules: dict[tuple[int, int], int] = {}
+    merge_rules: list[list[int]] = []  # [id_1, id_2, pair_id]
 
     pair_vs_count: dict[tuple[int,int], int] = defaultdict(int)
     pair_vs_ids: dict[tuple[int, int], set[tuple[int, ...]]] = defaultdict(set)  # cache
@@ -395,68 +413,29 @@ def train_bpe(
         for pair in zip(ids, ids[1:]):  # [0, 1, 2, 3] and [1, 2, 3] -> (0, 1), (1, 2), (2, 3)
             pair_vs_ids[pair].add(ids)  # register to cache
 
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    print(f"python.train_bpe() : register cache done [{elapsed_ms} ms]")
 
     merge_rules = rstk.train_bpe_loop(
             num_merges,
             pair_vs_count,
             pair_vs_ids,
             ids_vs_count,
-            merge_rules,
     )
 
-    #for step in tqdm(range(num_merges), desc = "Training BPE"):
-    #    if not pair_vs_count:
-    #        # NOP, there is no pair.
-    #        break
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    print(f"python.train_bpe() : train_bpe_loop done [{elapsed_ms} ms]")
 
-    #    merge_rules = rstk.train_bpe_loop(
-    #            step,
-    #            pair_vs_count,
-    #            pair_vs_ids,
-    #            ids_vs_count,
-    #            merge_rules,
-    #    )
+    # list -> dict
+    merge_rules_dict: dict[tuple[int, int], int] = {}
+    for (id_1, id_2, new_id) in merge_rules:
+        merge_rules_dict[(id_1, id_2)] = new_id
 
-    #    #most_available_pair: tuple[int, int] = max(
-    #    #        pair_vs_count,
-    #    #        #key = lambda pair: pair_vs_count[pair],
-    #    #        key = lambda pair: (pair_vs_count[pair], pair[0], pair[1]),
-    #    #)
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    print(f"python.train_bpe() : list -> dict done [{elapsed_ms} ms]")
 
-    #    #new_id: int = 256 + step
-    #    #merge_rules[most_available_pair] = new_id
-
-    #    ## get cache and delete
-    #    #affected_ids: set[tuple[int, ...]] = pair_vs_ids[most_available_pair]
-    #    #del pair_vs_ids[most_available_pair]
-
-    #    #for ids in affected_ids:
-    #    #    ids_count: int = ids_vs_count[ids]
-    #    #    new_ids: list[int] = merge(list(ids), most_available_pair, new_id)
-
-    #    #    # update related ids
-    #    #    del ids_vs_count[ids]
-    #    #    ids_vs_count[tuple(new_ids)] = ids_count
-
-    #    #    # update old
-    #    #    old_pair_vs_count: dict[tuple[int, int], int] = count_pairs(list(ids))
-    #    #    for pair, count in old_pair_vs_count.items():
-    #    #        # pair count in ids(pretoken) x ids(pretoken) count in text
-    #    #        #     = pair count in same pretoken in text. != total pair count in text
-    #    #        pair_vs_count[pair] -= count * ids_count
-    #    #        if pair_vs_count[pair] <= 0:
-    #    #            del pair_vs_count[pair]
-    #    #        pair_vs_ids[pair].discard(ids)  # delete from cache set
-
-    #    #    # update new
-    #    #    new_pair_vs_count: dict[tuple[int, int], int] = count_pairs(new_ids)
-    #    #    for pair, count in new_pair_vs_count.items():
-    #    #        # pair count in ids(pretoken) x ids(pretoken) count in text
-    #    #        #     = pair count in same pretoken in text. != total pair count in text
-    #    #        pair_vs_count[pair] += count * ids_count
-    #    #        pair_vs_ids[pair].add(tuple(new_ids))
-
-    return merge_rules
+    print("python.train_bpe() : X")
+    return merge_rules_dict
 
 
 class RoPE(nn.Module):
@@ -1015,20 +994,34 @@ owt_valid_txt = f"{SCRIPT_DIR}/.tmp/owt_valid.txt"
 webbot_merge_rules_pkl = f"{SCRIPT_DIR}/dataset/webbot/webbot_merge_rules.pkl"
 
 if __name__ == "__main__":
+    #vocab_size = 1000
+    #merge_rules = train_bpe(
+    #        tiny_codes_txt,
+    #        vocab_size,
+    #        num_processes = 12,
+    #        num_chunks = 16,
+    #)
+
+    #vocab_size = 10000
+    #merge_rules = train_bpe(
+    #        tiny_stories_train_txt,
+    #        vocab_size,
+    #        num_processes = 12,
+    #        num_chunks = 64,
+    #)
+
     vocab_size = 50000
-    #merge_rules = train_bpe(tiny_codes_txt, vocab_size, num_processes = 2, num_chunks = 16)
-    #merge_rules = train_bpe(tiny_stories_train_txt, vocab_size, num_processes = 2, num_chunks = 64)
-    merge_rules = train_bpe(owt_train_txt, vocab_size, num_processes = 2, num_chunks = 256)
+    merge_rules = train_bpe(
+            owt_train_txt,
+            vocab_size,
+            num_processes = 12,
+            num_chunks = 256,
+    )
+
     print(f"merge_rules len = {len(merge_rules)}")
 
     with open(webbot_merge_rules_pkl, "wb") as f:
         pickle.dump(merge_rules, f)
-
-
-
-exit()
-
-
 
 
 owt_train_bin = f"{SCRIPT_DIR}/.tmp/owt_train.bin"

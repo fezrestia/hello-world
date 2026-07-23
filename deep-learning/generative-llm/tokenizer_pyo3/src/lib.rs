@@ -1,11 +1,10 @@
 use pyo3::prelude::*;
 use std::collections::{HashMap, HashSet};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use fancy_regex::Regex;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-
-
+use log::info;
 
 fn pretokenize(text: &str) -> Vec<String> {
     static PATTERN: &str =
@@ -93,11 +92,15 @@ fn train_bpe_loop(
         mut pair_vs_count: HashMap<(i32, i32), i32>,
         mut pair_vs_ids: HashMap<(i32, i32), HashSet<Vec<i32>>>,
         mut ids_vs_count: HashMap<Vec<i32>, i32>,
-        mut merge_rules: HashMap<(i32, i32), i32>,
-) -> HashMap<(i32, i32), i32> {
+) -> Vec<Vec<i32>> {
     println!("pyo3.train_bpe_loop() : E");
 
     let log_steps: i32 = (num_merges / 100).max(1);
+
+    let mut elapsed_total_ms = Duration::ZERO;
+    let mut elapsed_count: u32 = 0;
+
+    let mut merge_rules: Vec<Vec<i32>> = Vec::new();
 
     for step in 0..num_merges {
         if pair_vs_count.is_empty() {
@@ -113,7 +116,8 @@ fn train_bpe_loop(
                 .unwrap();
 
         let new_id: i32 = 256 + step;
-        merge_rules.insert(most_available_pair, new_id);
+        let (id_1, id_2) = most_available_pair;
+        merge_rules.push(vec![id_1, id_2, new_id]);
 
         let affected_ids = pair_vs_ids.remove(&most_available_pair).unwrap();
 
@@ -154,12 +158,22 @@ fn train_bpe_loop(
             }
         }
 
+        elapsed_total_ms += start_ts.elapsed();
+        elapsed_count += 1;
+
         if step % log_steps == 0 {
-            println!("train_bpe_loop ... {}/{} [{} ms]",
+            let log_line = format!("train_bpe_loop ... {}/{} [{} ms in {} loops]",
                     step,
                     num_merges,
-                    start_ts.elapsed().as_secs_f64() * 1000.0,
+                    elapsed_total_ms.as_secs_f64() * 1000.0,
+                    elapsed_count,
             );
+
+            println!("{}", log_line);
+            info!("{}", log_line);
+
+            elapsed_total_ms = Duration::ZERO;
+            elapsed_count = 0;
         }
     }
 
@@ -171,6 +185,8 @@ fn train_bpe_loop(
 
 #[pymodule]
 fn tokenizer_pyo3(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    pyo3_log::init();
+
     m.add_function(wrap_pyfunction!(proc_pretoken_chunk, m)?)?;
     m.add_function(wrap_pyfunction!(train_bpe_loop, m)?)?;
     Ok(())

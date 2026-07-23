@@ -10,4 +10,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 fancy-regex = "0.18.0"
+log = "0.4.33"
 pyo3 = "0.29.0"
+pyo3-log = "0.13.4"
