@@ -339,6 +339,7 @@ def proc_pretoken_chunk(args: tuple[str, int, int, str]) -> dict[str, int]:
             for pretoken in pretokenize(text):
                 pretoken_vs_count[pretoken] += 1
 
+
     return pretoken_vs_count
 
 
@@ -350,8 +351,9 @@ def train_bpe(
         num_chunks: int = 64,
 ) -> dict[tuple[int, int], int]:
     print("python.train_bpe() : E")
+
+    enter_ts = time.perf_counter()
     start_ts = time.perf_counter()
-    elapsed_ms = 0.0
 
     chunk_boundaries: list[int] = find_chunk_boundaries(
             file_path,
@@ -360,8 +362,9 @@ def train_bpe(
     )
     total_chunks: int = len(chunk_boundaries) - 1
 
-    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
     print(f"python.train_bpe() : find_chunk_boundaries() done [{elapsed_ms} ms]")
+    start_ts = time.perf_counter()
 
     # paralell task
     chunk_info_list = []
@@ -370,8 +373,9 @@ def train_bpe(
         end: int = chunk_boundaries[chunk_idx + 1]
         chunk_info_list.append((file_path, start, end, end_token))
 
-    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
     print(f"python.train_bpe() : parallel task def done [{elapsed_ms} ms]")
+    start_ts = time.perf_counter()
 
     # run parallel
     with Pool(processes = num_processes) as pool:
@@ -380,9 +384,11 @@ def train_bpe(
                 total = len(chunk_info_list),
                 desc = "Pretokenizing",
         ))
+    #all_results: list[dict[str, int]] = [proc_pretoken_chunk(chunk_info_list[0])]
 
-    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
     print(f"python.train_bpe() : run parallel done [{elapsed_ms} ms]")
+    start_ts = time.perf_counter()
 
     # merge result
     pretoken_vs_count: dict[str, int] = defaultdict(int)
@@ -390,31 +396,37 @@ def train_bpe(
         for pretoken, count in chunk_result.items():
             pretoken_vs_count[pretoken] += count
 
-    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
     print(f"python.train_bpe() : merge result done [{elapsed_ms} ms]")
+    start_ts = time.perf_counter()
 
     # pretoken -> id
-    ids_vs_count: dict[tuple[int, ...], int] = {
-            tuple(pretoken.encode("utf-8")): count for pretoken, count in pretoken_vs_count.items()
-    }
+    #ids_vs_count: dict[tuple[int, ...], int] = {
+    #        tuple(pretoken.encode("utf-8")): count for pretoken, count in pretoken_vs_count.items()
+    #}
+    ids_vs_count: dict[tuple[int, ...], int] = rstk.encode_pretoken(pretoken_vs_count)
 
-    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
     print(f"python.train_bpe() : pretoken -> id done [{elapsed_ms} ms]")
+    start_ts = time.perf_counter()
 
     # 256 : default vocal size (1 byte)
     # 1 : end token
     num_merges: int = target_vocab_size - 256 - 1
     merge_rules: list[list[int]] = []  # [id_1, id_2, pair_id]
 
+    # gen cache
     pair_vs_count: dict[tuple[int,int], int] = defaultdict(int)
-    pair_vs_ids: dict[tuple[int, int], set[tuple[int, ...]]] = defaultdict(set)  # cache
-    for ids, count in ids_vs_count.items():
-        count_pairs(list(ids), count, pair_vs_count)
-        for pair in zip(ids, ids[1:]):  # [0, 1, 2, 3] and [1, 2, 3] -> (0, 1), (1, 2), (2, 3)
-            pair_vs_ids[pair].add(ids)  # register to cache
+    pair_vs_ids: dict[tuple[int, int], set[tuple[int, ...]]] = defaultdict(set)
+    #for ids, count in ids_vs_count.items():
+    #    count_pairs(list(ids), count, pair_vs_count)
+    #    for pair in zip(ids, ids[1:]):  # [0, 1, 2, 3] and [1, 2, 3] -> (0, 1), (1, 2), (2, 3)
+    #        pair_vs_ids[pair].add(ids)  # register to cache
+    (pair_vs_count, pair_vs_ids) = rstk.gen_cache(ids_vs_count)
 
-    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
     print(f"python.train_bpe() : register cache done [{elapsed_ms} ms]")
+    start_ts = time.perf_counter()
 
     merge_rules = rstk.train_bpe_loop(
             num_merges,
@@ -423,18 +435,20 @@ def train_bpe(
             ids_vs_count,
     )
 
-    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
     print(f"python.train_bpe() : train_bpe_loop done [{elapsed_ms} ms]")
+    start_ts = time.perf_counter()
 
     # list -> dict
     merge_rules_dict: dict[tuple[int, int], int] = {}
     for (id_1, id_2, new_id) in merge_rules:
         merge_rules_dict[(id_1, id_2)] = new_id
 
-    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0 - elapsed_ms
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
     print(f"python.train_bpe() : list -> dict done [{elapsed_ms} ms]")
+    start_ts = time.perf_counter()
 
-    print("python.train_bpe() : X")
+    print(f"python.train_bpe() : X [{(time.perf_counter() - enter_ts) * 1000.0} ms]")
     return merge_rules_dict
 
 
@@ -998,24 +1012,24 @@ if __name__ == "__main__":
     #merge_rules = train_bpe(
     #        tiny_codes_txt,
     #        vocab_size,
-    #        num_processes = 12,
-    #        num_chunks = 16,
+    #        num_processes = 1,
+    #        num_chunks = 1,
     #)
 
     #vocab_size = 10000
     #merge_rules = train_bpe(
     #        tiny_stories_train_txt,
     #        vocab_size,
-    #        num_processes = 12,
-    #        num_chunks = 64,
+    #        num_processes = 2,
+    #        num_chunks = 256,
     #)
 
     vocab_size = 50000
     merge_rules = train_bpe(
             owt_train_txt,
             vocab_size,
-            num_processes = 12,
-            num_chunks = 256,
+            num_processes = 2,
+            num_chunks = 2048,
     )
 
     print(f"merge_rules len = {len(merge_rules)}")
@@ -1024,147 +1038,147 @@ if __name__ == "__main__":
         pickle.dump(merge_rules, f)
 
 
-owt_train_bin = f"{SCRIPT_DIR}/.tmp/owt_train.bin"
-owt_valid_bin = f"{SCRIPT_DIR}/.tmp/owt_valid.bin"
-
-if __name__ == '__main__':
-    tokenizer = BPETokenizer.load_from(webbot_merge_rules_pkl)
-
-    tokenizer.encode_file(
-            owt_train_txt,
-            owt_train_bin,
-            num_processes = 12,
-    )
-
-    tokenizer.encode_file(
-            owt_valid_txt,
-            owt_valid_bin,
-            num_processes = 12,
-    )
-
-
-
-print(f"# 8 : Model Challenge")
-
-
-
-print(f"# 9 : Learning Challenge")
-
-# hyper param
-
-gpt_model_webbot_pretrain_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_webbot_pretrain.pt"
-
-context_len = 1024
-vocab_size = 50000
-micro_batch_size = 32
-accumulation_steps = 4
-learning_rate = 6e-4  # max
-warmup_iters = 500
-max_iters = 100000
-embed_dim = 768
-n_head = 16
-n_layer = 12
-ff_dim = 2048
-theta = 10000
-eval_iters = 1000
-grad_clip = 1.0
-
-if __name__ == '__main__':
-    wandb.config.update({
-            "context_len": context_len,
-            "vocab_size": vocab_size,
-            "micro_batch_size": micro_batch_size,
-            "accumulation_steps": accumulation_steps,
-            "learning_rate": learning_rate,
-            "warmup_iters": warmup_iters,
-            "max_iters": max_iters,
-            "embed_dim": embed_dim,
-            "n_head": n_head,
-            "n_layer": n_layer,
-            "ff_dim": ff_dim,
-            "theta": theta,
-            "eval_iters": eval_iters,
-            "grad_clip": grad_clip,
-    })
-
-# load data
-train_data = np.memmap(owt_train_bin, dtype = np.uint16, mode = "r")
-valid_data = np.memmap(owt_valid_bin, dtype = np.uint16, mode = "r")
-print(f"owt_train.bin : {len(train_data)} tokens")
-print(f"owt_valid.bin : {len(valid_data)} tokens")
-
-# components
-model: Any = GPT(
-        vocab_size,
-        context_len,
-        embed_dim,
-        n_head,
-        n_layer,
-        ff_dim,
-        theta,
-).to(device)
-
-num_params = sum(p.numel() for p in model.parameters())
-print(f"parameter count : {num_params} ({num_params/1e6:.2f}M")
-
-model = torch.compile(model)
-
-optimizer = AdamW(model.parameters(), lr = learning_rate)
-
-pbar = tqdm(range(max_iters))
-
-val_losses = []
-val_iters = []
-
-for i in pbar:
-    # update learning rate
-    lr = get_learning_rate(i, warmup_iters, max_iters, learning_rate)
-    for param_group in optimizer.param_groups:
-        param_group["lr"] = lr
-
-    optimizer.zero_grad()
-
-    # gradient accumulation
-    for micro_step in range(accumulation_steps):
-        (batch_x, batch_y) = get_batch(train_data, context_len, micro_batch_size, device)
-
-        with autocast(device_type = device.type, dtype = torch.bfloat16):
-            logits = model(batch_x)
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
-            loss = loss / accumulation_steps
-
-        loss.backward()  # accumulate
-
-    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-    optimizer.step()
-
-
-    # log per step
-    train_loss = loss.item() * accumulation_steps
-    wandb.log({"train/loss": train_loss, "train/lr": lr}, step = i)
-
-
-    # evaluate
-    val_loss: Any = "N/A"
-    if (i % eval_iters) == 0 or i == max_iters - 1:
-        val_loss = evaluate(model, valid_data, context_len, micro_batch_size, device)
-        val_losses.append(val_loss)
-        val_iters.append(i)
-
-        wandb.log({"val/loss": val_loss}, step = i)
-
-    print(f"step = {i}, train_loss = {train_loss:.6f}, val_loss = {val_loss:.6f}")
-    pbar.set_postfix({"train_loss": f"{train_loss:.6f}", "val_loss": f"{val_loss:.6f}"})
-
-model.save_to(gpt_model_webbot_pretrain_pt)
-
-plt.figure(figsize = (10, 6))
-plt.plot(val_iters, val_losses)
-plt.xlabel("iteration")
-plt.ylabel("validation loss")
-plt.grid(True)
-plt.savefig(f"{SCRIPT_DIR}/.tmp/storybot_pretrain_loss_val.png")
-plt.show()
-
-wandb.finish()
+#owt_train_bin = f"{SCRIPT_DIR}/.tmp/owt_train.bin"
+#owt_valid_bin = f"{SCRIPT_DIR}/.tmp/owt_valid.bin"
+#
+#if __name__ == '__main__':
+#    tokenizer = BPETokenizer.load_from(webbot_merge_rules_pkl)
+#
+#    tokenizer.encode_file(
+#            owt_train_txt,
+#            owt_train_bin,
+#            num_processes = 12,
+#    )
+#
+#    tokenizer.encode_file(
+#            owt_valid_txt,
+#            owt_valid_bin,
+#            num_processes = 12,
+#    )
+#
+#
+#
+#print(f"# 8 : Model Challenge")
+#
+#
+#
+#print(f"# 9 : Learning Challenge")
+#
+## hyper param
+#
+#gpt_model_webbot_pretrain_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_webbot_pretrain.pt"
+#
+#context_len = 1024
+#vocab_size = 50000
+#micro_batch_size = 32
+#accumulation_steps = 4
+#learning_rate = 6e-4  # max
+#warmup_iters = 500
+#max_iters = 100000
+#embed_dim = 768
+#n_head = 16
+#n_layer = 12
+#ff_dim = 2048
+#theta = 10000
+#eval_iters = 1000
+#grad_clip = 1.0
+#
+#if __name__ == '__main__':
+#    wandb.config.update({
+#            "context_len": context_len,
+#            "vocab_size": vocab_size,
+#            "micro_batch_size": micro_batch_size,
+#            "accumulation_steps": accumulation_steps,
+#            "learning_rate": learning_rate,
+#            "warmup_iters": warmup_iters,
+#            "max_iters": max_iters,
+#            "embed_dim": embed_dim,
+#            "n_head": n_head,
+#            "n_layer": n_layer,
+#            "ff_dim": ff_dim,
+#            "theta": theta,
+#            "eval_iters": eval_iters,
+#            "grad_clip": grad_clip,
+#    })
+#
+## load data
+#train_data = np.memmap(owt_train_bin, dtype = np.uint16, mode = "r")
+#valid_data = np.memmap(owt_valid_bin, dtype = np.uint16, mode = "r")
+#print(f"owt_train.bin : {len(train_data)} tokens")
+#print(f"owt_valid.bin : {len(valid_data)} tokens")
+#
+## components
+#model: Any = GPT(
+#        vocab_size,
+#        context_len,
+#        embed_dim,
+#        n_head,
+#        n_layer,
+#        ff_dim,
+#        theta,
+#).to(device)
+#
+#num_params = sum(p.numel() for p in model.parameters())
+#print(f"parameter count : {num_params} ({num_params/1e6:.2f}M")
+#
+#model = torch.compile(model)
+#
+#optimizer = AdamW(model.parameters(), lr = learning_rate)
+#
+#pbar = tqdm(range(max_iters))
+#
+#val_losses = []
+#val_iters = []
+#
+#for i in pbar:
+#    # update learning rate
+#    lr = get_learning_rate(i, warmup_iters, max_iters, learning_rate)
+#    for param_group in optimizer.param_groups:
+#        param_group["lr"] = lr
+#
+#    optimizer.zero_grad()
+#
+#    # gradient accumulation
+#    for micro_step in range(accumulation_steps):
+#        (batch_x, batch_y) = get_batch(train_data, context_len, micro_batch_size, device)
+#
+#        with autocast(device_type = device.type, dtype = torch.bfloat16):
+#            logits = model(batch_x)
+#            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
+#            loss = loss / accumulation_steps
+#
+#        loss.backward()  # accumulate
+#
+#    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+#    optimizer.step()
+#
+#
+#    # log per step
+#    train_loss = loss.item() * accumulation_steps
+#    wandb.log({"train/loss": train_loss, "train/lr": lr}, step = i)
+#
+#
+#    # evaluate
+#    val_loss: Any = "N/A"
+#    if (i % eval_iters) == 0 or i == max_iters - 1:
+#        val_loss = evaluate(model, valid_data, context_len, micro_batch_size, device)
+#        val_losses.append(val_loss)
+#        val_iters.append(i)
+#
+#        wandb.log({"val/loss": val_loss}, step = i)
+#
+#    print(f"step = {i}, train_loss = {train_loss:.6f}, val_loss = {val_loss:.6f}")
+#    pbar.set_postfix({"train_loss": f"{train_loss:.6f}", "val_loss": f"{val_loss:.6f}"})
+#
+#model.save_to(gpt_model_webbot_pretrain_pt)
+#
+#plt.figure(figsize = (10, 6))
+#plt.plot(val_iters, val_losses)
+#plt.xlabel("iteration")
+#plt.ylabel("validation loss")
+#plt.grid(True)
+#plt.savefig(f"{SCRIPT_DIR}/.tmp/storybot_pretrain_loss_val.png")
+#plt.show()
+#
+#wandb.finish()
 

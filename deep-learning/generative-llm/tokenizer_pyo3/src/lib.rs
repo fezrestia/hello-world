@@ -1,20 +1,38 @@
-use pyo3::prelude::*;
-use std::collections::{HashMap, HashSet};
+use pyo3::prelude::*;use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
-use fancy_regex::Regex;
+//use fancy_regex::Regex;
+use regex::Regex;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use log::info;
+use pyo3::types::{PyDict, PyTuple, PySet};
+use once_cell::sync::Lazy;
+
+
+static REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        //r#"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"#
+        r#"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+"#
+    ).unwrap()
+});
 
 fn pretokenize(text: &str) -> Vec<String> {
-    static PATTERN: &str =
-        r#"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"#;  // raw string
+//    static PATTERN: &str =
+//        r#"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"#;  // raw string
+//
+//    let re = Regex::new(PATTERN).unwrap();
+//
+//    return re.find_iter(text)
 
-    let re = Regex::new(PATTERN).unwrap();
+//    return REGEX.find_iter(text)
+//            .map(|m| {
+//                m.unwrap().as_str().to_string()
+//            })
+//            .collect();
 
-    return re.find_iter(text)
+    return REGEX.find_iter(text)
             .map(|m| {
-                m.unwrap().as_str().to_string()
+                m.as_str().to_string()
             })
             .collect();
 }
@@ -26,15 +44,54 @@ fn proc_pretoken_chunk(
         end: u64,
         end_token: &str,
 ) -> HashMap<String, i32> {
+    info!("pyo3.proc_pretoken_chunk() : E / [{}-{}]", start, end);
+    println!("pyo3.proc_pretoken_chunk() : E / [{}-{}]", start, end);
+
+
+    let mut start_ts = Instant::now();
+
+
     let mut pretoken_vs_count: HashMap<String, i32> = HashMap::new();
 
     let mut f = File::open(file_path).unwrap();
 
+
+    info!("pyo3.proc_pretoken_chunk() : File::open() done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    println!("pyo3.proc_pretoken_chunk() : File::open() done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    start_ts = Instant::now();
+
+
     f.seek(SeekFrom::Start(start)).unwrap();  // move cursor to start
+
+
+    info!("pyo3.proc_pretoken_chunk() : seek() done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    println!("pyo3.proc_pretoken_chunk() : seek() done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    start_ts = Instant::now();
+
+
     let mut chunk_bytes = vec![0u8; (end - start) as usize];  // read buffer
+
+
+    info!("pyo3.proc_pretoken_chunk() : chunk bytes done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    println!("pyo3.proc_pretoken_chunk() : chunk bytes done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    start_ts = Instant::now();
+
+
     f.read_exact(&mut chunk_bytes).unwrap();  // read
 
+
+    info!("pyo3.proc_pretoken_chunk() : read buf done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    println!("pyo3.proc_pretoken_chunk() : read buf done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    start_ts = Instant::now();
+
+
     let chunk_text = String::from_utf8_lossy(&chunk_bytes);
+
+
+    info!("pyo3.proc_pretoken_chunk() : from_utf8_lossy done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    println!("pyo3.proc_pretoken_chunk() : from_utf8_lossy done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    start_ts = Instant::now();
+
 
     for text in chunk_text.split(end_token) {
         for pretoken in pretokenize(text) {
@@ -42,25 +99,86 @@ fn proc_pretoken_chunk(
         }
     }
 
+
+    info!("pyo3.proc_pretoken_chunk() : pretokenize for x2 done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    println!("pyo3.proc_pretoken_chunk() : pretokenize for x2 done [{} ms]", start_ts.elapsed().as_secs_f64() * 1000.0);
+    //start_ts = Instant::now();
+
+
+    info!("pyo3.proc_pretoken_chunk() : X");
+    println!("pyo3.proc_pretoken_chunk() : X");
     return pretoken_vs_count;
 }
 
 
 
+#[pyfunction]
+fn encode_pretoken(
+        py: Python,
+        pretoken_vs_count: HashMap<String, i32>,
+) -> PyResult<Py<PyDict>> {  // dict[tuple[int, ...], int]
+    let py_dict = PyDict::new(py);
+
+    for (pretoken, count) in pretoken_vs_count {
+        // String -> utf-8 bytes -> Vec<i32>
+        let ids: Vec<i32> = pretoken .into_bytes().into_iter().map(|b| b as i32).collect();
+
+        // Vec<i32> -> PyTuple
+        let key = PyTuple::new(py, ids)?;
+
+        py_dict.set_item(key, count)?;
+    }
+
+    return Ok(py_dict.unbind());  // unbound from py
+}
+
+
 fn count_pairs(
         ids: &Vec<i32>,
         weight: i32,
-        counts: Option<HashMap<(i32, i32), i32>>,
-) -> HashMap<(i32, i32), i32> {
-    let mut counts = counts.unwrap_or_default();
-
+        counts: &mut HashMap<(i32, i32), i32>,
+) {
     for pair in ids.windows(2) {
         let key = (pair[0], pair[1]);
         *counts.entry(key).or_insert(0) += weight;
     }
-
-    return counts
 }
+
+
+#[pyfunction]
+fn gen_cache(
+        py: Python,
+        ids_vs_count: HashMap<Vec<i32>, i32>,
+) -> PyResult<(Py<PyDict>, Py<PyDict>)> {  // pair_vs_count, pair_vs_ids
+    let mut pair_vs_count_map: HashMap<(i32, i32), i32> = HashMap::new();
+    let pair_vs_ids = PyDict::new(py);
+
+    for (ids, count) in ids_vs_count.iter() {
+        count_pairs(ids, *count, &mut pair_vs_count_map);
+
+        for pair in ids.windows(2).map(|w| (w[0], w[1])) {  // [0, 1, 2, 3] -> [0, 1], [1, 2], ...
+            let ids_set = match pair_vs_ids.get_item(pair)? {
+                Some(obj) => obj.cast_into::<PySet>()?,
+                None => {
+                    let s = PySet::empty(py)?;
+                    pair_vs_ids.set_item(pair, &s)?;
+                    s
+                }
+            };
+
+            let val = PyTuple::new(py, ids)?;
+            ids_set.add(val)?;
+        }
+    }
+
+    let pair_vs_count = PyDict::new(py);
+    for (pair, count) in pair_vs_count_map.iter() {
+        pair_vs_count.set_item(pair, count)?;
+    }
+
+    return Ok((pair_vs_count.unbind(), pair_vs_ids.unbind()));
+}
+
 
 fn merge(
         ids: &Vec<i32>,
@@ -120,7 +238,6 @@ fn train_bpe_loop(
         merge_rules.push(vec![id_1, id_2, new_id]);
 
         let affected_ids = pair_vs_ids.remove(&most_available_pair).unwrap();
-
         for ids in affected_ids {
             let ids_count = *ids_vs_count.get(&ids).unwrap();
 
@@ -131,7 +248,8 @@ fn train_bpe_loop(
 
 
             // update old
-            let old_pair_vs_count = count_pairs(&ids, 1, None);
+            let mut old_pair_vs_count: HashMap<(i32, i32), i32> = HashMap::new();
+            count_pairs(&ids, 1, &mut old_pair_vs_count);
             for (pair, count) in old_pair_vs_count {
                 if let Some(v) = pair_vs_count.get_mut(&pair) {
                     *v -= count * ids_count;
@@ -147,7 +265,8 @@ fn train_bpe_loop(
             }
 
             // update new
-            let new_pair_vs_count = count_pairs(&new_ids, 1, None);
+            let mut new_pair_vs_count: HashMap<(i32, i32), i32> = HashMap::new();
+            count_pairs(&new_ids, 1, &mut new_pair_vs_count);
             for (pair, count) in new_pair_vs_count {
                 *pair_vs_count.entry(pair).or_insert(0) += count * ids_count;
 
@@ -188,6 +307,8 @@ fn tokenizer_pyo3(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
     m.add_function(wrap_pyfunction!(proc_pretoken_chunk, m)?)?;
+    m.add_function(wrap_pyfunction!(encode_pretoken, m)?)?;
+    m.add_function(wrap_pyfunction!(gen_cache, m)?)?;
     m.add_function(wrap_pyfunction!(train_bpe_loop, m)?)?;
     Ok(())
 }
