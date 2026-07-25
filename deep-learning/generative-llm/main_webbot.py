@@ -1028,7 +1028,7 @@ if __name__ == "__main__":
     merge_rules = train_bpe(
             owt_train_txt,
             vocab_size,
-            num_processes = 2,
+            num_processes = 12,
             num_chunks = 2048,
     )
 
