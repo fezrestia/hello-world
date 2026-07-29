@@ -1094,178 +1094,180 @@ print(f"# 9 : Learning Challenge")
 
 gpt_model_webbot_pretrain_pt = f"{SCRIPT_DIR}/.tmp/gpt_model_webbot_pretrain.pt"
 
-## hyper param
-#
-#context_len = 1024
-#vocab_size = 50000
-#micro_batch_size = 32
-#accumulation_steps = 4
-#learning_rate = 6e-4  # max
-#warmup_iters = 500
-#max_iters = 1000 #100000
-#embed_dim = 768
-#n_head = 16
-#n_layer = 12
-#ff_dim = 2048
-#theta = 10000
-#eval_iters = 100 #1000
-#grad_clip = 1.0
-#
-##if __name__ == '__main__':
-##    wandb.init(project = "gpt-model-webbot-pretrain", config = {})
-##    wandb.config.update({
-##            "context_len": context_len,
-##            "vocab_size": vocab_size,
-##            "micro_batch_size": micro_batch_size,
-##            "accumulation_steps": accumulation_steps,
-##            "learning_rate": learning_rate,
-##            "warmup_iters": warmup_iters,
-##            "max_iters": max_iters,
-##            "embed_dim": embed_dim,
-##            "n_head": n_head,
-##            "n_layer": n_layer,
-##            "ff_dim": ff_dim,
-##            "theta": theta,
-##            "eval_iters": eval_iters,
-##            "grad_clip": grad_clip,
-##    })
-#
-## load data
-#train_data = np.memmap(owt_train_bin, dtype = np.uint16, mode = "r")
-#valid_data = np.memmap(owt_valid_bin, dtype = np.uint16, mode = "r")
-#print(f"owt_train.bin : {len(train_data)} tokens")
-#print(f"owt_valid.bin : {len(valid_data)} tokens")
-#
-## components
-#model_path = Path(gpt_model_webbot_pretrain_pt)
-#model: Any
-#if model_path.exists():
-#    print("Continue Training ...")
-#    model = GPT.load_from(gpt_model_webbot_pretrain_pt, device)
-#else:
-#    print("Train New Model")
-#    model = GPT(
-#            vocab_size,
-#            context_len,
-#            embed_dim,
-#            n_head,
-#            n_layer,
-#            ff_dim,
-#            theta,
-#    ).to(device)
-#
-#num_params = sum(p.numel() for p in model.parameters())
-#print(f"parameter count : {num_params} ({num_params/1e6:.2f}M)")
-#
-#model = torch.compile(model)
-#
-#optimizer = AdamW(model.parameters(), lr = learning_rate)
-#if model.optimizer_state_dict is not None:
-#    optimizer.load_state_dict(model.optimizer_state_dict)
-#
-#
-#train_losses = []
-#train_iters = []
-#
-##val_loss: float = -1.0
-##val_losses = []
-##val_iters = []
-#
-#
-#print(f"train from iteration : {model.iteration}")
-#
-#pbar = tqdm(range(max_iters))
-#start_iter = model.iteration
-#for i in pbar:
-#    i = start_iter + i
-#    model.iteration += 1
-#
-#    # update learning rate
-#    lr = get_learning_rate(i, warmup_iters, max_iters, learning_rate)
-#    for param_group in optimizer.param_groups:
-#        param_group["lr"] = lr
-#
-#    optimizer.zero_grad()
-#
-#    # gradient accumulation
-#    for micro_step in range(accumulation_steps):
-#        (batch_x, batch_y) = get_batch(train_data, context_len, micro_batch_size, device)
-#
-#        with autocast(device_type = device.type, dtype = torch.bfloat16):
-#            logits = model(batch_x)
-#            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
-#            loss = loss / accumulation_steps
-#
-#        loss.backward()  # accumulate
-#
-#    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-#    optimizer.step()
-#
-#
-#    # log per step
-#    train_loss = loss.item() * accumulation_steps
-#    #wandb.log({"train/loss": train_loss, "train/lr": lr}, step = i)
-#
-#    train_losses.append(train_loss)
-#    train_iters.append(i)
-#
-#    # evaluate
-#    #if (i % eval_iters) == 0:
-#    #    val_loss = evaluate(model, valid_data, context_len, micro_batch_size, device)
-#    #    val_losses.append(val_loss)
-#    #    val_iters.append(i)
-#
-#    #    #wandb.log({"val/loss": val_loss}, step = i)
-#
-#    #pbar.set_postfix({"train_loss": f"{train_loss:.3f}", "val_loss": f"{val_loss:.3f}"})
-#    pbar.set_postfix({"train_loss": f"{train_loss:.3f}"})
-#
-#
-## evaluate
-#val_loss = evaluate(model, valid_data, context_len, micro_batch_size, device)
-#print(f"val_loss = {val_loss}, iteration = {model.iteration}")
-#
-#
-#model.save_to(optimizer, gpt_model_webbot_pretrain_pt)
-#
-#plt.figure(figsize = (10, 6))
-#plt.plot(train_iters, train_losses, label = "train")
-##plt.plot(val_iters, val_losses, label = "validate")
-#plt.xlabel("iteration")
-#plt.ylabel("loss")
-#plt.grid(True)
-#plt.legend()
-#plt.savefig(f"{SCRIPT_DIR}/.tmp/storybot_pretrain_loss_val.png")
-#plt.show()
-#
-##wandb.finish()
+# hyper param
+
+context_len = 1024
+vocab_size = 50000
+micro_batch_size = 32
+accumulation_steps = 4
+learning_rate = 6e-4  # max
+warmup_iters = 500
+max_iters = 100000
+cur_step_iters = 1000
+embed_dim = 768
+n_head = 16
+n_layer = 12
+ff_dim = 2048
+theta = 10000
+eval_iters = 100 #1000
+grad_clip = 1.0
+
+#if __name__ == '__main__':
+#    wandb.init(project = "gpt-model-webbot-pretrain", config = {})
+#    wandb.config.update({
+#            "context_len": context_len,
+#            "vocab_size": vocab_size,
+#            "micro_batch_size": micro_batch_size,
+#            "accumulation_steps": accumulation_steps,
+#            "learning_rate": learning_rate,
+#            "warmup_iters": warmup_iters,
+#            "max_iters": max_iters,
+#            "cur_step_iters": cur_step_iters,
+#            "embed_dim": embed_dim,
+#            "n_head": n_head,
+#            "n_layer": n_layer,
+#            "ff_dim": ff_dim,
+#            "theta": theta,
+#            "eval_iters": eval_iters,
+#            "grad_clip": grad_clip,
+#    })
+
+# load data
+train_data = np.memmap(owt_train_bin, dtype = np.uint16, mode = "r")
+valid_data = np.memmap(owt_valid_bin, dtype = np.uint16, mode = "r")
+print(f"owt_train.bin : {len(train_data)} tokens")
+print(f"owt_valid.bin : {len(valid_data)} tokens")
+
+# components
+model_path = Path(gpt_model_webbot_pretrain_pt)
+model: Any
+if model_path.exists():
+    print("Continue Training ...")
+    model = GPT.load_from(gpt_model_webbot_pretrain_pt, device)
+else:
+    print("Train New Model")
+    model = GPT(
+            vocab_size,
+            context_len,
+            embed_dim,
+            n_head,
+            n_layer,
+            ff_dim,
+            theta,
+    ).to(device)
+
+num_params = sum(p.numel() for p in model.parameters())
+print(f"parameter count : {num_params} ({num_params/1e6:.2f}M)")
+
+model = torch.compile(model)
+
+optimizer = AdamW(model.parameters(), lr = learning_rate)
+if model.optimizer_state_dict is not None:
+    optimizer.load_state_dict(model.optimizer_state_dict)
+
+
+train_losses = []
+train_iters = []
+
+#val_loss: float = -1.0
+#val_losses = []
+#val_iters = []
+
+
+print(f"train from iteration : {model.iteration}")
+
+pbar = tqdm(range(cur_step_iters))
+start_iter = model.iteration
+for i in pbar:
+    i = start_iter + i
+    model.iteration += 1
+
+    # update learning rate
+    lr = get_learning_rate(i, warmup_iters, max_iters, learning_rate)
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = lr
+
+    optimizer.zero_grad()
+
+    # gradient accumulation
+    for micro_step in range(accumulation_steps):
+        (batch_x, batch_y) = get_batch(train_data, context_len, micro_batch_size, device)
+
+        with autocast(device_type = device.type, dtype = torch.bfloat16):
+            logits = model(batch_x)
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), batch_y.view(-1))
+            loss = loss / accumulation_steps
+
+        loss.backward()  # accumulate
+
+    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+    optimizer.step()
+
+
+    # log per step
+    train_loss = loss.item() * accumulation_steps
+    #wandb.log({"train/loss": train_loss, "train/lr": lr}, step = i)
+
+    train_losses.append(train_loss)
+    train_iters.append(i)
+
+    # evaluate
+    #if (i % eval_iters) == 0:
+    #    val_loss = evaluate(model, valid_data, context_len, micro_batch_size, device)
+    #    val_losses.append(val_loss)
+    #    val_iters.append(i)
+
+    #    #wandb.log({"val/loss": val_loss}, step = i)
+
+    #pbar.set_postfix({"train_loss": f"{train_loss:.3f}", "val_loss": f"{val_loss:.3f}"})
+    pbar.set_postfix({"train_loss": f"{train_loss:.3f}"})
+
+
+# evaluate
+val_loss = evaluate(model, valid_data, context_len, micro_batch_size, device)
+print(f"val_loss = {val_loss}, iteration = {model.iteration}")
+
+
+model.save_to(optimizer, gpt_model_webbot_pretrain_pt)
+
+plt.figure(figsize = (10, 6))
+plt.plot(train_iters, train_losses, label = "train")
+#plt.plot(val_iters, val_losses, label = "validate")
+plt.xlabel("iteration")
+plt.ylabel("loss")
+plt.grid(True)
+plt.legend()
+plt.savefig(f"{SCRIPT_DIR}/.tmp/storybot_pretrain_loss_val.png")
+plt.show()
+
+#wandb.finish()
 
 
 
 # generate
 
-max_new_tokens = 100
-temperature = 0.5
-
-prompts = [
-    "In 1991, Linus Torvalds created",
-    "Monday, Tuesday, Wednesday,",
-    "Python was created by",
-    "Machine learning is defined as",
-    "The capital of Japan is",
-]
-
-tokenizer = BPETokenizer.load_from(webbot_merge_rules_pkl)
-
-model = GPT.load_from(gpt_model_webbot_pretrain_pt, device)
-
-print()
-for i, prompt in enumerate(prompts, 1):
-    print(f"{"-" * 64}")
-    print(f"prompt sample {i} = {prompt}")
-    print(f"{"-" * 16}")
-
-    response = generate(model, tokenizer, prompt, max_new_tokens, temperature)
-    print(response)
-    print()
+#max_new_tokens = 100
+#temperature = 1.0
+#
+#prompts = [
+#    "In 1991, Linus Torvalds created",
+#    "Monday, Tuesday, Wednesday,",
+#    "Python was created by",
+#    "Machine learning is defined as",
+#    "The capital of Japan is",
+#]
+#
+#tokenizer = BPETokenizer.load_from(webbot_merge_rules_pkl)
+#
+#model = GPT.load_from(gpt_model_webbot_pretrain_pt, device)
+#
+#print()
+#for i, prompt in enumerate(prompts, 1):
+#    print(f"{"-" * 64}")
+#    print(f"prompt sample {i} = {prompt}")
+#    print(f"{"-" * 16}")
+#
+#    response = generate(model, tokenizer, prompt, max_new_tokens, temperature)
+#    print(response)
+#    print()
 
